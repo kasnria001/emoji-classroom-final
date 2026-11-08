@@ -21,7 +21,11 @@ export function reqReject(error) {
 }
 
 export function resResolve(response) {
-  const { data, status, statusText } = response
+  const { data, status, statusText, config } = response
+  // 文件下载（blob）响应直接透传，不做业务码解析。
+  if (config?.responseType === 'blob' || data instanceof Blob) {
+    return Promise.resolve(data)
+  }
   if (data?.code !== 200) {
     const code = data?.code ?? status
     /** 根据code处理对应的操作，并返回处理后的message */

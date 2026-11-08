@@ -8,7 +8,7 @@ from tortoise.functions import Count
 from app.core.crud import CRUDBase
 from app.models.admin import User
 from app.models.classroom import ClassSession, EmojiRecord, ScheduleUser
-from app.models.enums import EmojiSource
+from app.models.enums import EmojiSource, EmojiType
 from app.schemas.emoji import EmojiCreate
 
 
@@ -154,6 +154,82 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
     # 兼容路由层常用的简短命名。
     create_emoji = create_record
     history = get_user_history
+
+    async def list_records(
+        self,
+        actor_id: int,
+        is_superuser: bool,
+        session_id: int | None = None,
+        user_id: int | None = None,
+        emoji_type: EmojiType | None = None,
+        source: EmojiSource | None = None,
+        course_id: int | None = None,
+        class_name: str | None = None,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ):
+        """管理端分页查询 Emoji 记录：管理员看全部，教师看自己的课堂。"""
+
+        query = self.model.all().select_related("session__course", "user")
+        if not is_superuser:
+            query = query.filter(session__course__teacher_id=actor_id)
+        if session_id is not None:
+            query = query.filter(session_id=session_id)
+        if user_id is not None:
+            query = query.filter(user_id=user_id)
+        if emoji_type is not None:
+            query = query.filter(emoji_type=emoji_type)
+        if source is not None:
+            query = query.filter(source=source)
+        if course_id is not None:
+            query = query.filter(session__course_id=course_id)
+        if class_name:
+            query = query.filter(session__class_name=class_name)
+        if from_time is not None:
+            query = query.filter(timestamp__gte=from_time)
+        if to_time is not None:
+            query = query.filter(timestamp__lte=to_time)
+        total = await query.count()
+        records = await query.order_by("-timestamp").offset((page - 1) * page_size).limit(page_size)
+        return total, records
+
+    async def export_records(
+        self,
+        actor_id: int,
+        is_superuser: bool,
+        session_id: int | None = None,
+        user_id: int | None = None,
+        emoji_type: EmojiType | None = None,
+        source: EmojiSource | None = None,
+        course_id: int | None = None,
+        class_name: str | None = None,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+    ) -> list[EmojiRecord]:
+        """导出符合条件的全部 Emoji 记录，不参与分页。"""
+
+        query = self.model.all().select_related("session__course", "user")
+        if not is_superuser:
+            query = query.filter(session__course__teacher_id=actor_id)
+        if session_id is not None:
+            query = query.filter(session_id=session_id)
+        if user_id is not None:
+            query = query.filter(user_id=user_id)
+        if emoji_type is not None:
+            query = query.filter(emoji_type=emoji_type)
+        if source is not None:
+            query = query.filter(source=source)
+        if course_id is not None:
+            query = query.filter(session__course_id=course_id)
+        if class_name:
+            query = query.filter(session__class_name=class_name)
+        if from_time is not None:
+            query = query.filter(timestamp__gte=from_time)
+        if to_time is not None:
+            query = query.filter(timestamp__lte=to_time)
+        return await query.order_by("-timestamp")
 
 
 emoji_controller = EmojiController()

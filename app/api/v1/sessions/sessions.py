@@ -45,6 +45,22 @@ async def delete_session(session_id: int):
     return Success(msg="Deleted Successfully")
 
 
+@router.get("/{session_id}/schedule", response_model=None, dependencies=[DependAuth], summary="查询课堂已安排用户")
+async def list_scheduled_users(session_id: int):
+    schedules = await session_controller.list_scheduled_users(session_id, CTX_USER_ID.get())
+    data = []
+    for schedule in schedules:
+        data.append(
+            {
+                "id": schedule.id,
+                "user_id": schedule.user_id,
+                "username": schedule.user.username if schedule.user else None,
+                "scheduled_at": schedule.scheduled_at.strftime("%Y-%m-%d %H:%M:%S") if schedule.scheduled_at else None,
+            }
+        )
+    return Success(data=data)
+
+
 @router.post("/{session_id}/schedule", response_model=None, dependencies=[DependAuth], summary="安排课堂用户")
 async def schedule_user(session_id: int, payload: ScheduleUserCreate):
     item = await session_controller.schedule_user(payload.model_copy(update={"session_id": session_id}), actor_id=CTX_USER_ID.get())

@@ -2,19 +2,141 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from app.controllers.emoji import emoji_controller
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependAuth
+from app.models import Course, User
+from app.models.enums import EmojiSource, EmojiType
 from app.schemas.base import Success, SuccessExtra
 from app.schemas.emoji import EmojiCreate
+from app.services.export import build_csv_bytes
 
 router = APIRouter()
 
 
 async def _dict(obj):
     return obj if isinstance(obj, dict) else await obj.to_dict()
+
+
+def _enum_value(value) -> str:
+    return str(value.value if hasattr(value, "value") else value)
+
+
+async def _require_teacher_or_admin(actor: User) -> None:
+    if actor.is_superuser:
+        return
+    has_course = await Course.filter(teacher_id=actor.id).exists()
+    if not has_course:
+        raise HTTPException(status_code=403, detail="Only teachers and administrators can access emoji data")
+
+
+@router.get("", response_model=None, dependencies=[DependAuth], summary="查询 Emoji 记录列表")
+async def list_emoji(
+    session_id: int | None = None,
+    user_id: int | None = None,
+    emoji_type: EmojiType | None = None,
+    source: EmojiSource | None = None,
+    course_id: int | None = None,
+    class_name: str | None = None,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    actor_id = CTX_USER_ID.get()
+    actor = await User.get(id=actor_id)
+    await _require_teacher_or_admin(actor)
+    total, records = await emoji_controller.list_records(
+        actor_id,
+        actor.is_superuser,
+        session_id,
+        user_id,
+        emoji_type,
+        source,
+        course_id,
+        class_name,
+        from_time,
+        to_time,
+        page,
+        page_size,
+    )
+    data = []
+    for record in records:
+        item = await record.to_dict()
+        item["username"] = record.user.username if record.user else None
+        item["course_name"] = record.session.course.name if record.session.course else None
+        item["class_name"] = record.session.class_name
+        item["classroom"] = record.session.classroom
+        data.append(item)
+    return SuccessExtra(data=data, total=total, page=page, page_size=page_size)
+
+
+@router.get("/export", response_model=None, dependencies=[DependAuth], summary="导出 Emoji 记录 CSV")
+async def export_emoji(
+    session_id: int | None = None,
+    user_id: int | None = None,
+    emoji_type: EmojiType | None = None,
+    source: EmojiSource | None = None,
+    course_id: int | None = None,
+    class_name: str | None = None,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+):
+    actor_id = CTX_USER_ID.get()
+    actor = await User.get(id=actor_id)
+    await _require_teacher_or_admin(actor)
+    records = await emoji_controller.export_records(
+        actor_id,
+        actor.is_superuser,
+        session_id,
+        user_id,
+        emoji_type,
+        source,
+        course_id,
+        class_name,
+        from_time,
+        to_time,
+    )
+    headers = [
+        "id",
+        "user_id",
+        "username",
+        "session_id",
+        "course_name",
+        "class_name",
+        "classroom",
+        "emoji_type",
+        "source",
+        "confidence",
+        "device_source",
+        "timestamp",
+    ]
+    rows = [
+        [
+            record.id,
+            record.user_id or "",
+            record.user.username if record.user else "",
+            record.session_id,
+            record.session.course.name if record.session.course else "",
+            record.session.class_name or "",
+            record.session.classroom or "",
+            _enum_value(record.emoji_type),
+            _enum_value(record.source),
+            record.confidence if record.confidence is not None else "",
+            record.device_source or "",
+            record.timestamp.strftime("%Y-%m-%d %H:%M:%S") if record.timestamp else "",
+        ]
+        for record in records
+    ]
+    content = build_csv_bytes(headers, rows)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="emoji_records.csv"'},
+    )
 
 
 @router.post("", response_model=None, dependencies=[DependAuth], summary="提交 Emoji")

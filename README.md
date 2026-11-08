@@ -467,4 +467,36 @@ pytest
 
 - `tests/test_classroom_schemas.py`：A 模块 Schema 单元测试，覆盖课程名称、课堂时间区间、手动/AI Emoji 的置信度约束。
 - `tests/test_classroom_api.py`：A 模块接口测试，覆盖课程增删查、课堂会话创建与时间校验、排课、手动 Emoji 提交、来源约束以及教师/学生数据归属校验。
+- `tests/test_classroom_admin.py`：C 模块接口测试，覆盖管理端统计、实时看板、CSV 导出（含注入防护）、Emoji 列表、排课列表以及学生越权拦截。
+
+## 课堂情绪模块（C）：管理端看板与统计
+
+C 模块负责管理端：管理员/教师查看 Emoji 数据、多维统计、实时课堂情绪看板、CSV 导出，以及课堂排课管理页面。
+
+### 后端接口（前缀 `/api/v1`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/emoji` | 分页查询 Emoji 记录（管理员看全部，教师看自己的课堂） |
+| GET | `/emoji/export` | 导出 Emoji 记录 CSV（含 UTF-8 BOM 与 CSV 注入防护） |
+| GET | `/statistics` | 多维统计：按情绪类型、课程、班级、来源、按天/按小时聚合 |
+| GET | `/dashboard/realtime?session_id=` | 实时课堂情绪看板 |
+| GET | `/sessions/{session_id}/schedule` | 查询课堂已安排的用户列表 |
+
+上述接口均需登录（`token` 请求头）。统计与看板接口仅管理员和教师可访问，学生访问返回 403；教师只能查看自己所授课程的数据。
+
+### 前端管理端页面
+
+菜单「课堂情绪管理」下新增：
+
+| 菜单 | 路径 | 说明 |
+| --- | --- | --- |
+| 实时看板 | `/classroom/dashboard` | 选择课堂查看实时情绪汇总、分布与时间线，支持自动刷新 |
+| 多维统计 | `/classroom/statistics` | 按课程/班级/时间筛选，展示类型/课程/班级/来源分布与趋势 |
+| 课程管理 | `/classroom/course` | 课程增删改查 |
+| 课堂会话 | `/classroom/session` | 课堂会话增删改查与排课管理 |
+| Emoji 数据 | `/classroom/emoji` | Emoji 记录查询与 CSV 导出 |
+
+菜单在应用启动时通过 `init_classroom_menus` 幂等补齐（新老数据库都会自动创建），无需手动插入。
+
 

@@ -1,9 +1,8 @@
-import shutil
-
 from aerich import Command
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
+from tortoise import Tortoise
 from tortoise.expressions import Q
 
 from app.api import api_router
@@ -176,6 +175,52 @@ async def init_menus():
         )
 
 
+async def init_classroom_menus():
+    """补齐管理端课堂情绪菜单（幂等，兼容已初始化过的数据库）。"""
+
+    parent = await Menu.get_or_none(path="/classroom", parent_id=0)
+    if parent is None:
+        parent = await Menu.create(
+            menu_type=MenuType.CATALOG,
+            name="课堂情绪管理",
+            path="/classroom",
+            order=3,
+            parent_id=0,
+            icon="carbon:activity",
+            is_hidden=False,
+            component="Layout",
+            keepalive=False,
+            redirect="/classroom/dashboard",
+        )
+
+    children = [
+        ("实时看板", "dashboard", "material-symbols:dashboard-outline", 1),
+        ("多维统计", "statistics", "carbon:chart-line", 2),
+        ("课程管理", "course", "carbon:book", 3),
+        ("课堂会话", "session", "carbon:calendar", 4),
+        ("Emoji 数据", "emoji", "material-symbols:mood-outline", 5),
+    ]
+    for name, path, icon, order in children:
+        if not await Menu.filter(path=path, parent_id=parent.id).exists():
+            await Menu.create(
+                menu_type=MenuType.MENU,
+                name=name,
+                path=path,
+                order=order,
+                parent_id=parent.id,
+                icon=icon,
+                is_hidden=False,
+                component=f"/classroom/{path}",
+                keepalive=False,
+            )
+
+    # 教师和管理员都需要通过管理端查看课堂看板与统计，给所有角色补充分配。
+    menus = [parent] + await Menu.filter(parent_id=parent.id)
+    for role in await Role.all():
+        for menu in menus:
+            await role.menus.add(menu)
+
+
 async def init_apis():
     apis = await api_controller.model.exists()
     if not apis:
@@ -193,9 +238,11 @@ async def init_db():
     try:
         await command.migrate()
     except AttributeError:
-        logger.warning("unable to retrieve model history from database, model history will be created from scratch")
-        shutil.rmtree("migrations")
-        await command.init_db(safe=True)
+        # 数据库尚无 aerich 历史记录（例如全新 SQLite 库）。手动创建全部表
+        # （含 aerich 历史表），再应用 migrations 目录中已有的迁移。
+        # 不要删除 migrations 目录，否则会破坏仓库中已提交的迁移文件。
+        logger.warning("unable to retrieve model history from database, applying existing migrations instead")
+        await Tortoise.generate_schemas()
 
     await command.upgrade(run_in_transaction=True)
 
@@ -229,5 +276,6 @@ async def init_data():
     await init_db()
     await init_superuser()
     await init_menus()
+    await init_classroom_menus()
     await init_apis()
     await init_roles()

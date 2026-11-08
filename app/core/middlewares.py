@@ -112,7 +112,12 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
             except Exception:
                 return None
 
-        return self.lenient_json(body)
+        result = self.lenient_json(body)
+        if isinstance(result, (str, bytes)):
+            # 非 JSON 响应（例如 CSV 文件下载）不适合直接写入 JSON 字段，
+            # 只记录媒体类型，避免把文件内容作为 response_body 入库。
+            return {"code": 0, "msg": "Non-JSON response body", "media_type": response.headers.get("content-type", "")}
+        return result
 
     def lenient_json(self, v: Any) -> Any:
         if isinstance(v, (str, bytes)):

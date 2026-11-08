@@ -40,4 +40,23 @@ export default {
   deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
   // auditlog
   getAuditLogList: (params = {}) => request.get('/auditlog/list', { params }),
+  // classroom - courses
+  getCourses: (params = {}) => request.get('/courses', { params }),
+  createCourse: (data = {}) => request.post('/courses', data),
+  updateCourse: (data = {}) => request.put(`/courses/${data.id}`, data),
+  deleteCourse: (params = {}) => request.delete(`/courses/${params.course_id}`),
+  // classroom - sessions
+  getSessions: (params = {}) => request.get('/sessions', { params }),
+  createSession: (data = {}) => request.post('/sessions', data),
+  updateSession: (data = {}) => request.put(`/sessions/${data.id}`, data),
+  deleteSession: (params = {}) => request.delete(`/sessions/${params.session_id}`),
+  scheduleUser: (sessionId, data = {}) => request.post(`/sessions/${sessionId}/schedule`, data),
+  unscheduleUser: (sessionId, userId) => request.delete(`/sessions/${sessionId}/schedule/${userId}`),
+  getScheduledUsers: (sessionId, params = {}) => request.get(`/sessions/${sessionId}/schedule`, { params }),
+  // classroom - emoji
+  getEmojiList: (params = {}) => request.get('/emoji', { params }),
+  exportEmoji: (params = {}) => request.get('/emoji/export', { params, responseType: 'blob' }),
+  // classroom - dashboard & statistics
+  getRealtimeDashboard: (params = {}) => request.get('/dashboard/realtime', { params }),
+  getStatistics: (params = {}) => request.get('/statistics', { params }),
 }

@@ -97,5 +97,11 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
     async def is_user_scheduled(self, session_id: int, user_id: int) -> bool:
         return await ScheduleUser.filter(session_id=session_id, user_id=user_id).exists()
 
+    async def list_scheduled_users(self, session_id: int, actor_id: int) -> list[ScheduleUser]:
+        """查询某课堂已安排的用户（管理员或该课堂教师）。"""
+
+        await self.get_for_actor(session_id, actor_id)
+        return await ScheduleUser.filter(session_id=session_id).prefetch_related("user").order_by("scheduled_at")
+
 
 session_controller = SessionController()
