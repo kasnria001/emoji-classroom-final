@@ -36,7 +36,16 @@ onMounted(() => {
 
 const columns = [
   { title: 'ID', key: 'id', width: 60, align: 'center' },
-  { title: '用户', key: 'username', width: 120, align: 'center', render: (row) => row.username || '匿名' },
+  {
+    title: '用户',
+    key: 'username',
+    width: 180,
+    align: 'center',
+    render: (row) => {
+      const no = row.user_no ? `${row.user_no} ` : ''
+      return `${no}${row.username || '匿名'}`
+    },
+  },
   { title: '课程', key: 'course_name', align: 'center', ellipsis: { tooltip: true } },
   { title: '班级', key: 'class_name', width: 120, align: 'center', ellipsis: { tooltip: true } },
   {
@@ -114,8 +123,8 @@ async function handleExport() {
         <QueryBarItem label="课堂ID" :label-width="60">
           <NInputNumber v-model:value="queryItems.session_id" clearable placeholder="课堂ID" />
         </QueryBarItem>
-        <QueryBarItem label="用户ID" :label-width="60">
-          <NInputNumber v-model:value="queryItems.user_id" clearable placeholder="用户ID" />
+        <QueryBarItem label="用户编号" :label-width="60">
+          <NInput v-model:value="queryItems.user_no" clearable placeholder="如 PB0001" />
         </QueryBarItem>
         <QueryBarItem label="情绪" :label-width="60">
           <NSelect v-model:value="queryItems.emoji_type" clearable :options="emojiTypeOptions" placeholder="全部" />

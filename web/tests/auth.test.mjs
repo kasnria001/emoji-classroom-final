@@ -64,10 +64,10 @@ test('Beijing display converts absolute timestamps and preserves business wall-c
   assert.equal(formatDateTime(null), '—')
 })
 
-test('phase5 production registration password policy counts Unicode code points', () => {
-  for (const password of ['', 'a'.repeat(7), 'a'.repeat(129), null])
+test('phase5 production registration password policy requires letters and digits', () => {
+  for (const password of ['', 'a'.repeat(7), 'a'.repeat(129), null, 'a'.repeat(8), '12345678', '😀'.repeat(8)])
     assert.equal(realRegistrationPasswordValidator(password), false)
-  for (const password of ['a'.repeat(8), 'a'.repeat(128), '😀'.repeat(8)])
+  for (const password of ['a1'.repeat(4), 'A1'.repeat(64), 'Passw0rd123'])
     assert.equal(realRegistrationPasswordValidator(password), true)
 })
 
@@ -120,7 +120,7 @@ test('role IDs, labels, absent or malformed codes never grant business access', 
     'TEACHER',
     'STUDENT',
   ])
-  assert.equal(getDefaultPath({ is_superuser: true }), '/workbench')
+  assert.equal(getDefaultPath({ is_superuser: true }), '/classroom/dashboard')
 })
 
 test('single and dual role defaults and switching use only returned codes', () => {
@@ -265,7 +265,7 @@ test('registration is locally blocked while the public contract is absent', asyn
     /REGISTRATION_PENDING/
   )
   const page = setup(Register)
-  assert.equal(page.ready, false)
+  assert.equal(page.ready.value, false)
   await page.handleRegister()
   assert.equal(state.calls.length, 0)
   assert.equal(page.errorMessage.value, 'auth.registrationPending')

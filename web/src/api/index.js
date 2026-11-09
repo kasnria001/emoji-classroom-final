@@ -3,6 +3,8 @@ import {
   registrationReady,
   studentRegistrationContract,
   studentClassroomContract,
+  teacherRegistrationContract,
+  teacherRegistrationReady,
 } from './auth-contract'
 import { manualEmojiPayload } from '@/utils/emoji'
 import { passwordPayload, studentRegistrationPayload } from '@/utils/auth/forms'
@@ -13,6 +15,12 @@ export default {
   registerStudent: (data) => {
     if (!registrationReady()) return Promise.reject(new Error('REGISTRATION_PENDING'))
     return request.post(studentRegistrationContract.path, studentRegistrationPayload(data), {
+      noNeedToken: true,
+    })
+  },
+  registerTeacher: (data) => {
+    if (!teacherRegistrationReady()) return Promise.reject(new Error('REGISTRATION_PENDING'))
+    return request.post(teacherRegistrationContract.path, studentRegistrationPayload(data), {
       noNeedToken: true,
     })
   },
@@ -50,24 +58,6 @@ export default {
   createRole: (data = {}) => request.post('/role/create', data),
   updateRole: (data = {}) => request.post('/role/update', data),
   deleteRole: (params = {}) => request.delete('/role/delete', { params }),
-  updateRoleAuthorized: (data = {}) => request.post('/role/authorized', data),
-  getRoleAuthorized: (params = {}) => request.get('/role/authorized', { params }),
-  // menus
-  getMenus: (params = {}) => request.get('/menu/list', { params }),
-  createMenu: (data = {}) => request.post('/menu/create', data),
-  updateMenu: (data = {}) => request.post('/menu/update', data),
-  deleteMenu: (params = {}) => request.delete('/menu/delete', { params }),
-  // apis
-  getApis: (params = {}) => request.get('/api/list', { params }),
-  createApi: (data = {}) => request.post('/api/create', data),
-  updateApi: (data = {}) => request.post('/api/update', data),
-  deleteApi: (params = {}) => request.delete('/api/delete', { params }),
-  refreshApi: (data = {}) => request.post('/api/refresh', data),
-  // depts
-  getDepts: (params = {}) => request.get('/dept/list', { params }),
-  createDept: (data = {}) => request.post('/dept/create', data),
-  updateDept: (data = {}) => request.post('/dept/update', data),
-  deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
   // auditlog
   getAuditLogList: (params = {}) => request.get('/auditlog/list', { params }),
   // classroom - courses

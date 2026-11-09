@@ -2,7 +2,6 @@ from aerich import Command
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
-from tortoise import Tortoise
 from tortoise.expressions import Q
 
 from app.api import api_router
@@ -119,42 +118,9 @@ async def init_menus():
             ),
             Menu(
                 menu_type=MenuType.MENU,
-                name="菜单管理",
-                path="menu",
-                order=3,
-                parent_id=parent_menu.id,
-                icon="material-symbols:list-alt-outline",
-                is_hidden=False,
-                component="/system/menu",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="API管理",
-                path="api",
-                order=4,
-                parent_id=parent_menu.id,
-                icon="ant-design:api-outlined",
-                is_hidden=False,
-                component="/system/api",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="部门管理",
-                path="dept",
-                order=5,
-                parent_id=parent_menu.id,
-                icon="mingcute:department-line",
-                is_hidden=False,
-                component="/system/dept",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
                 name="审计日志",
                 path="auditlog",
-                order=6,
+                order=3,
                 parent_id=parent_menu.id,
                 icon="ph:clipboard-text-bold",
                 is_hidden=False,
@@ -163,18 +129,6 @@ async def init_menus():
             ),
         ]
         await Menu.bulk_create(children_menu)
-        await Menu.create(
-            menu_type=MenuType.MENU,
-            name="一级菜单",
-            path="/top-menu",
-            order=2,
-            parent_id=0,
-            icon="material-symbols:featured-play-list-outline",
-            is_hidden=False,
-            component="/top-menu",
-            keepalive=False,
-            redirect="",
-        )
 
 
 async def init_classroom_menus():
@@ -216,13 +170,6 @@ async def init_classroom_menus():
                 keepalive=False,
             )
 
-    # 教师和管理员都需要通过管理端查看课堂看板与统计，给所有角色补充分配。
-    menus = [parent] + await Menu.filter(parent_id=parent.id)
-    for role in await Role.all():
-        for menu in menus:
-            await role.menus.add(menu)
-
-
 async def init_apis():
     apis = await api_controller.model.exists()
     if not apis:
@@ -237,41 +184,59 @@ async def init_db():
         pass
 
     await command.init()
-    try:
-        await command.migrate()
-    except AttributeError:
-        # 数据库尚无 aerich 历史记录（例如全新 SQLite 库）。手动创建全部表
-        # （含 aerich 历史表），再应用 migrations 目录中已有的迁移。
-        # 不要删除 migrations 目录，否则会破坏仓库中已提交的迁移文件。
-        logger.warning("unable to retrieve model history from database, applying existing migrations instead")
-        await Tortoise.generate_schemas()
-
+    # 只应用 migrations 目录中已有的迁移，不在启动时自动生成新迁移文件；
+    # 全新库会按迁移 0→1→… 依次建表，已有库只执行尚未应用的迁移。
     await command.upgrade(run_in_transaction=True)
 
 
+async def _add_missing_apis(role: Role, apis: list[Api]) -> None:
+    existing = set(await role.apis.all().values_list("id", flat=True))
+    missing = [api for api in apis if api.id not in existing]
+    if missing:
+        await role.apis.add(*missing)
+
+
+async def _add_missing_menus(role: Role, menus: list[Menu]) -> None:
+    existing = set(await role.menus.all().values_list("id", flat=True))
+    missing = [menu for menu in menus if menu.id not in existing]
+    if missing:
+        await role.menus.add(*missing)
+
+
 async def init_roles():
-    roles = await Role.exists()
-    if not roles:
-        admin_role = await Role.create(
-            name="管理员",
-            desc="管理员角色",
-        )
-        user_role = await Role.create(
-            name="普通用户",
-            desc="普通用户角色",
-        )
+    """初始化统一的 ADMIN / TEACHER / STUDENT 角色并幂等分配权限。
 
-        # 分配所有API给管理员角色
-        all_apis = await Api.all()
-        await admin_role.apis.add(*all_apis)
-        # 分配所有菜单给管理员和普通用户
-        all_menus = await Menu.all()
-        await admin_role.menus.add(*all_menus)
-        await user_role.menus.add(*all_menus)
+    课堂业务按角色名 STUDENT / TEACHER 判断归属，因此统一使用英文角色名；
+    历史库中已有的中文模板角色不会被删除，只补齐缺失的业务角色。
+    """
 
-        # 为普通用户分配基本API
-        basic_apis = await Api.filter(Q(method__in=["GET"]) | Q(tags="基础模块"))
-        await user_role.apis.add(*basic_apis)
+    await Role.get_or_create(name="ADMIN", defaults={"desc": "管理员角色"})
+    await Role.get_or_create(name="TEACHER", defaults={"desc": "教师角色"})
+    await Role.get_or_create(name="STUDENT", defaults={"desc": "学生角色"})
+
+    admin_role = await Role.get(name="ADMIN")
+    teacher_role = await Role.get(name="TEACHER")
+    student_role = await Role.get(name="STUDENT")
+
+    all_apis = await Api.all()
+    all_menus = await Menu.all()
+    basic_apis = await Api.filter(Q(tags="基础模块"))
+
+    # 管理员：全部 API 与菜单。
+    await _add_missing_apis(admin_role, all_apis)
+    await _add_missing_menus(admin_role, all_menus)
+
+    # 教师：基础模块 API + 实时课堂看板与多维统计菜单。
+    await _add_missing_apis(teacher_role, basic_apis)
+    classroom_menu = await Menu.get_or_none(path="/classroom", parent_id=0)
+    if classroom_menu is not None:
+        teacher_menus = [classroom_menu] + await Menu.filter(
+            parent_id=classroom_menu.id, path__in=["dashboard", "statistics"]
+        )
+        await _add_missing_menus(teacher_role, teacher_menus)
+
+    # 学生：仅基础模块 API；学生入口由前端按 role_codes 渲染，无需后端菜单。
+    await _add_missing_apis(student_role, basic_apis)
 
 
 async def init_data():

@@ -14,73 +14,82 @@ export const basicRoutes = [
       { path: '', name: 'AccountHome', component: () => import('@/views/account/index.vue') },
     ],
   },
-  ...['STUDENT', 'TEACHER'].map((role) => ({
-    name: 'Business-' + role,
-    path: role === 'STUDENT' ? '/student/classroom' : '/teacher/classroom',
+  {
+    name: 'StudentSend',
+    path: '/student/classroom',
     component: Layout,
     meta: {
-      title: t(role === 'STUDENT' ? 'auth.studentEntry' : 'auth.teacherEntry'),
-      businessRole: role,
+      title: t('auth.studentSend'),
+      businessRole: 'STUDENT',
+      icon: 'mdi:emoticon-happy-outline',
+      order: 2,
+    },
+    children: [
+      {
+        path: '',
+        name: 'StudentSendHome',
+        component: () => import('@/views/student/classroom/index.vue'),
+        meta: { businessRole: 'STUDENT' },
+      },
+    ],
+  },
+  {
+    name: 'StudentHistory',
+    path: '/student/history',
+    component: Layout,
+    meta: {
+      title: t('auth.studentHistory'),
+      businessRole: 'STUDENT',
+      icon: 'mdi:history',
+      order: 3,
+    },
+    children: [
+      {
+        path: '',
+        name: 'StudentHistoryHome',
+        component: () => import('@/views/student/history/index.vue'),
+        meta: { businessRole: 'STUDENT' },
+      },
+    ],
+  },
+  {
+    name: 'TeacherClassroom',
+    path: '/teacher/classroom',
+    component: Layout,
+    meta: {
+      title: t('auth.teacherClassroom'),
+      businessRole: 'TEACHER',
       icon: 'mdi:school-outline',
       order: 2,
     },
     children: [
       {
         path: '',
-        name: 'BusinessHome-' + role,
-        component:
-          role === 'STUDENT'
-            ? () => import('@/views/student/classroom/index.vue')
-            : () => import('@/views/teacher/classroom/index.vue'),
-        meta: { businessRole: role },
+        name: 'TeacherClassroomHome',
+        component: () => import('@/views/teacher/classroom/index.vue'),
+        meta: { businessRole: 'TEACHER' },
       },
     ],
-  })),
-  ...[
-    {
-      name: 'StudentHistory',
-      path: '/student/history',
-      role: 'STUDENT',
-      component: () => import('@/views/student/history/index.vue'),
-    },
-    {
-      name: 'TeacherClassroomDetail',
-      path: '/teacher/classroom/detail',
-      role: 'TEACHER',
-      component: () => import('@/views/teacher/classroom-detail/index.vue'),
-    },
-  ].map((item) => ({
-    name: item.name + 'Layout',
-    path: item.path,
+  },
+  {
+    name: 'TeacherClassroomDetailLayout',
+    path: '/teacher/classroom/detail',
     component: Layout,
     isHidden: true,
-    meta: { businessRole: item.role },
+    meta: { businessRole: 'TEACHER' },
     children: [
-      { path: '', name: item.name, component: item.component, meta: { businessRole: item.role } },
+      {
+        path: '',
+        name: 'TeacherClassroomDetail',
+        component: () => import('@/views/teacher/classroom-detail/index.vue'),
+        meta: { businessRole: 'TEACHER' },
+      },
     ],
-  })),
+  },
   {
     path: '/',
     redirect: () => useUserStore().defaultPath,
     meta: { order: 0 },
-  },
-  {
-    name: t('views.workbench.label_workbench'),
-    path: '/workbench',
-    component: Layout,
-    children: [
-      {
-        path: '',
-        component: () => import('@/views/workbench/index.vue'),
-        name: `${t('views.workbench.label_workbench')}Default`,
-        meta: {
-          title: t('views.workbench.label_workbench'),
-          icon: 'icon-park-outline:workbench',
-          affix: true,
-        },
-      },
-    ],
-    meta: { order: 1 },
   },
   {
     name: t('views.profile.label_profile'),
@@ -106,6 +115,7 @@ export const basicRoutes = [
     path: '/error-page',
     component: Layout,
     redirect: '/error-page/404',
+    isHidden: true,
     meta: {
       title: t('views.errors.label_error'),
       icon: 'mdi:alert-circle-outline',

@@ -164,6 +164,7 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         is_superuser: bool,
         session_id: int | None = None,
         user_id: int | None = None,
+        user_no: str | None = None,
         emoji_type: EmojiType | None = None,
         source: EmojiSource | None = None,
         course_id: int | None = None,
@@ -182,6 +183,8 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
             query = query.filter(session_id=session_id)
         if user_id is not None:
             query = query.filter(user_id=user_id)
+        if user_no:
+            query = query.filter(user__user_no=user_no)
         if emoji_type is not None:
             query = query.filter(emoji_type=emoji_type)
         if source is not None:
@@ -204,6 +207,7 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         is_superuser: bool,
         session_id: int | None = None,
         user_id: int | None = None,
+        user_no: str | None = None,
         emoji_type: EmojiType | None = None,
         source: EmojiSource | None = None,
         course_id: int | None = None,
@@ -220,6 +224,8 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
             query = query.filter(session_id=session_id)
         if user_id is not None:
             query = query.filter(user_id=user_id)
+        if user_no:
+            query = query.filter(user__user_no=user_no)
         if emoji_type is not None:
             query = query.filter(emoji_type=emoji_type)
         if source is not None:

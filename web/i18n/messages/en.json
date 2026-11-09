@@ -1,6 +1,6 @@
 {
   "lang": "English",
-  "app_name": "Vue FastAPI Admin",
+  "app_name": "Emoji Classroom Emotion Checker System",
   "header": {
     "label_profile": "Profile",
     "label_logout": "Logout",
@@ -66,8 +66,13 @@
     "required": "This field is required",
     "invalidEmail": "Enter a valid email address",
     "passwordMismatch": "The passwords do not match",
-    "register": "Student registration",
-    "registerLink": "Create a student account",
+    "register": "Register",
+    "registerAs": "Register as",
+    "registerStudentLabel": "Student",
+    "registerTeacherLabel": "Teacher",
+    "registerLink": "Create an account",
+    "registerHintStudent": "Password must be 8–128 characters with both letters and digits. The server assigns the student role.",
+    "registerHintTeacher": "Password must be 8–128 characters with both letters and digits. The server assigns the teacher role.",
     "backToLogin": "Back to login",
     "registered": "Registration complete. Please sign in.",
     "registrationPending": "Public student registration and its password policy are not available yet. Contact the project administrator for a test account.",
@@ -81,11 +86,14 @@
     "switchEntry": "Switch client",
     "studentEntry": "My classrooms",
     "teacherEntry": "My courses and classrooms",
+    "studentSend": "Send Emoji",
+    "studentHistory": "My Emoji History",
+    "teacherClassroom": "My Classrooms",
     "rolesPending": "This account has no student or teacher role in the server response. You can still view your account and change your password.",
     "welcome": "Hello, {username}",
     "studentPending": "The student entry is ready. Scheduled classrooms and emotion submissions will be integrated in a later stage. No sample classrooms are shown.",
     "teacherPending": "The teacher entry is ready. Courses, classroom history and basic statistics will be integrated in a later stage. No sample data is shown.",
-    "registrationPasswordPolicy": "Password must contain 8 to 128 characters."
+    "registrationPasswordPolicy": "Password must be 8–128 characters with both letters and digits."
   },
   "history": {
     "studentTitle": "My emotion history",

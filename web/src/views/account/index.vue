@@ -19,7 +19,7 @@
         >
           {{ t(role === 'STUDENT' ? 'auth.studentEntry' : 'auth.teacherEntry') }}
         </n-button>
-        <n-button v-if="userStore.isSuperUser" @click="router.push('/workbench')">{{
+        <n-button v-if="userStore.isSuperUser" @click="router.push('/classroom/dashboard')">{{
           t('views.workbench.label_workbench')
         }}</n-button>
         <n-button @click="router.push('/profile')">{{

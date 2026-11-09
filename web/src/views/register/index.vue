@@ -11,6 +11,12 @@
         :disabled="loading"
         @submit.prevent="handleRegister"
       >
+        <n-form-item :label="t('auth.registerAs')">
+          <n-radio-group v-model:value="role" :disabled="loading">
+            <n-radio-button value="STUDENT">{{ t('auth.registerStudentLabel') }}</n-radio-button>
+            <n-radio-button value="TEACHER">{{ t('auth.registerTeacherLabel') }}</n-radio-button>
+          </n-radio-group>
+        </n-form-item>
         <n-form-item path="username" :label="t('auth.username')">
           <n-input v-model:value="form.username" autocomplete="username" :maxlength="20" />
         </n-form-item>
@@ -33,7 +39,7 @@
             show-password-on="click"
           />
         </n-form-item>
-        <p mb-15 op-60>密码长度为 8–128 个字符。注册账号由服务端固定为学生。</p>
+        <p mb-15 op-60>{{ hint }}</p>
         <n-alert v-if="errorMessage" type="error" mb-15>{{ errorMessage }}</n-alert>
         <n-button
           attr-type="submit"
@@ -54,12 +60,26 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
-import { registrationReady, studentRegistrationContract } from '@/api/auth-contract'
+import {
+  registrationReady,
+  studentRegistrationContract,
+  teacherRegistrationContract,
+  teacherRegistrationReady,
+} from '@/api/auth-contract'
 import { samePassword, validEmail } from '@/utils/auth/forms'
 
 const { t } = useI18n()
 const router = useRouter()
-const ready = registrationReady()
+const role = ref('STUDENT')
+const contract = computed(() =>
+  role.value === 'STUDENT' ? studentRegistrationContract : teacherRegistrationContract
+)
+const ready = computed(() =>
+  role.value === 'STUDENT' ? registrationReady() : teacherRegistrationReady()
+)
+const hint = computed(() =>
+  role.value === 'STUDENT' ? t('auth.registerHintStudent') : t('auth.registerHintTeacher')
+)
 const formRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
@@ -83,8 +103,7 @@ const rules = computed(() => ({
     { required: true, message: t('auth.required'), trigger: ['blur', 'input'] },
     {
       validator: (_, value) =>
-        !studentRegistrationContract.passwordValidator ||
-        studentRegistrationContract.passwordValidator(value),
+        !contract.value.passwordValidator || contract.value.passwordValidator(value),
       message: t('auth.registrationPasswordPolicy'),
       trigger: ['blur', 'input'],
     },
@@ -106,14 +125,15 @@ watch(
 async function handleRegister() {
   if (loading.value) return
   errorMessage.value = ''
-  if (!ready) {
+  if (!ready.value) {
     errorMessage.value = t('auth.registrationPending')
     return
   }
   loading.value = true
   try {
     await formRef.value.validate()
-    await api.registerStudent(form)
+    const submit = role.value === 'STUDENT' ? api.registerStudent(form) : api.registerTeacher(form)
+    await submit
     const username = form.username.trim()
     form.password = ''
     form.confirmation = ''

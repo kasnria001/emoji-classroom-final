@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.utils.password import is_password_strong
 
 
 class BaseUser(BaseModel):
@@ -42,3 +44,10 @@ class UserUpdate(BaseModel):
 class UpdatePassword(BaseModel):
     old_password: str = Field(description="旧密码")
     new_password: str = Field(description="新密码")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if not is_password_strong(value):
+            raise ValueError("密码须为 8~128 位，且同时包含字母和数字")
+        return value

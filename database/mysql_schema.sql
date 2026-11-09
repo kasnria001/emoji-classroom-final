@@ -16,6 +16,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS `user` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
     `username` VARCHAR(20) NOT NULL COMMENT '用户名',
+    `user_no` VARCHAR(16) NULL COMMENT '用户编号（学生 PBxxxx、教师 TBxxxx）',
     `alias` VARCHAR(30) NULL COMMENT '姓名',
     `email` VARCHAR(255) NOT NULL COMMENT '邮箱',
     `phone` VARCHAR(20) NULL COMMENT '电话',
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `user` (
         ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_username` (`username`),
+    UNIQUE KEY `uk_user_user_no` (`user_no`),
     UNIQUE KEY `uk_user_email` (`email`),
     KEY `idx_user_alias` (`alias`),
     KEY `idx_user_phone` (`phone`),

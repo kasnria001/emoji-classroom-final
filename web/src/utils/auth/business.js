@@ -18,7 +18,7 @@ export function getBusinessRoles(user = {}) {
 
 export function getDefaultPath(user = {}, activeRole = '') {
   if (getBusinessRoles(user).includes(activeRole)) return BUSINESS_HOMES[activeRole]
-  if (user.is_superuser === true) return '/workbench'
+  if (user.is_superuser === true) return '/classroom/dashboard'
   const firstRole = getBusinessRoles(user)[0]
   return firstRole ? BUSINESS_HOMES[firstRole] : '/account'
 }

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
 from fastapi import HTTPException
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from tortoise.transactions import in_transaction
 from app.models import Course, ScheduleUser
 
@@ -15,7 +15,7 @@ from app.schemas.login import *
 from app.schemas.users import UpdatePassword
 from app.settings import settings
 from app.utils.jwt_utils import create_access_token
-from app.utils.password import get_password_hash, verify_password
+from app.utils.password import get_password_hash, is_password_strong, verify_password
 
 router = APIRouter()
 
@@ -24,24 +24,50 @@ class StudentRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(min_length=1, max_length=20, pattern=r"^\S+$")
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(max_length=128, description="密码")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not is_password_strong(value):
+            raise ValueError("密码须为 8~128 位，且同时包含字母和数字")
+        return value
 
 
-@router.post("/register", summary="注册学生")
-async def register_student(payload: StudentRegister):
+class TeacherRegister(StudentRegister):
+    """教师注册请求结构与学生一致，服务端固定为教师角色。"""
+
+
+async def _register(payload: StudentRegister, role_name: str, role_desc: str) -> User:
     async with in_transaction():
-        if await User.filter(username=payload.username).exists() or await User.filter(email=payload.email).exists():
+        if (
+            await User.filter(username=payload.username).exists()
+            or await User.filter(email=str(payload.email)).exists()
+        ):
             raise HTTPException(409, "用户名或邮箱已存在")
         user = await User.create(
             username=payload.username,
             email=str(payload.email),
             password=get_password_hash(payload.password),
+            user_no=await User.next_user_no(role_name),
             is_active=True,
             is_superuser=False,
         )
-        role, _ = await Role.get_or_create(name="STUDENT", defaults={"desc": "学生"})
+        role, _ = await Role.get_or_create(name=role_name, defaults={"desc": role_desc})
         await user.roles.add(role)
-    return Success(data={"id": user.id, "username": user.username})
+        return user
+
+
+@router.post("/register", summary="注册学生")
+async def register_student(payload: StudentRegister):
+    user = await _register(payload, "STUDENT", "学生角色")
+    return Success(data={"id": user.id, "username": user.username, "user_no": user.user_no})
+
+
+@router.post("/register-teacher", summary="注册教师")
+async def register_teacher(payload: TeacherRegister):
+    user = await _register(payload, "TEACHER", "教师角色")
+    return Success(data={"id": user.id, "username": user.username, "user_no": user.user_no})
 
 
 @router.post("/access_token", summary="获取token")

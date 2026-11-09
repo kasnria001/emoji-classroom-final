@@ -8,6 +8,7 @@ from .enums import MethodType
 
 class User(BaseModel, TimestampMixin):
     username = fields.CharField(max_length=20, unique=True, description="用户名称", index=True)
+    user_no = fields.CharField(max_length=16, null=True, unique=True, description="用户编号", index=True)
     alias = fields.CharField(max_length=30, null=True, description="姓名", index=True)
     email = fields.CharField(max_length=255, unique=True, description="邮箱", index=True)
     phone = fields.CharField(max_length=20, null=True, description="电话", index=True)
@@ -20,6 +21,19 @@ class User(BaseModel, TimestampMixin):
 
     class Meta:
         table = "user"
+
+    @classmethod
+    async def next_user_no(cls, role_name: str) -> str:
+        """按角色生成独立编号：学生 PB0001 起，教师 TB0001 起。"""
+        prefix = "PB" if role_name == "STUDENT" else "TB"
+        max_seq = 0
+        async for user in cls.filter(user_no__startswith=prefix):
+            if user.user_no:
+                try:
+                    max_seq = max(max_seq, int(user.user_no[len(prefix):]))
+                except ValueError:
+                    continue
+        return f"{prefix}{max_seq + 1:04d}"
 
 
 class Role(BaseModel, TimestampMixin):

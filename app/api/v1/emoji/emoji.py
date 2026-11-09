@@ -47,6 +47,7 @@ async def _require_teacher_or_admin(actor: User) -> None:
 async def list_emoji(
     session_id: int | None = None,
     user_id: int | None = None,
+    user_no: str | None = None,
     emoji_type: EmojiType | None = None,
     source: EmojiSource | None = None,
     course_id: int | None = None,
@@ -65,6 +66,7 @@ async def list_emoji(
         actor.is_superuser,
         session_id,
         user_id,
+        user_no,
         emoji_type,
         source,
         course_id,
@@ -78,6 +80,7 @@ async def list_emoji(
     for record in records:
         item = await record.to_dict()
         item["username"] = record.user.username if record.user else None
+        item["user_no"] = record.user.user_no if record.user else None
         item["course_name"] = record.session.course.name if record.session.course else None
         item["class_name"] = record.session.class_name
         item["classroom"] = record.session.classroom
@@ -89,6 +92,7 @@ async def list_emoji(
 async def export_emoji(
     session_id: int | None = None,
     user_id: int | None = None,
+    user_no: str | None = None,
     emoji_type: EmojiType | None = None,
     source: EmojiSource | None = None,
     course_id: int | None = None,
@@ -104,6 +108,7 @@ async def export_emoji(
         actor.is_superuser,
         session_id,
         user_id,
+        user_no,
         emoji_type,
         source,
         course_id,
@@ -114,6 +119,7 @@ async def export_emoji(
     headers = [
         "id",
         "user_id",
+        "user_no",
         "username",
         "session_id",
         "course_name",
@@ -129,6 +135,7 @@ async def export_emoji(
         [
             record.id,
             record.user_id or "",
+            record.user.user_no if record.user else "",
             record.user.username if record.user else "",
             record.session_id,
             record.session.course.name if record.session.course else "",

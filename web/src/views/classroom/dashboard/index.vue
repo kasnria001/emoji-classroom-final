@@ -64,6 +64,7 @@ onBeforeUnmount(() => {
 })
 
 function onAutoRefreshChange(value) {
+  autoRefresh.value = value
   if (timer) clearInterval(timer)
   if (value) {
     timer = setInterval(loadDashboard, 10000)
