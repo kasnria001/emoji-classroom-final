@@ -2,17 +2,35 @@ import { getToken } from '@/utils'
 import { resolveResError } from './helpers'
 import { useUserStore } from '@/store'
 
-export function reqResolve(config) {
-  // 处理不需要token的请求
-  if (config.noNeedToken) {
-    return config
+// Never allow logout/notification failures to turn a failed request into success.
+function rejectResponse(code, message, config = {}, status) {
+  if ((code === 401 || status === 401) && !config.noNeedToken) {
+    const requestToken = config.headers?.token
+    if (!requestToken || requestToken === getToken()) {
+      try {
+        Promise.resolve(useUserStore().logout()).catch(() => {})
+      } catch {
+        // The caller still receives the original request error.
+      }
+    }
   }
+  const resolvedMessage = resolveResError(code, message)
+  try {
+    window.$message?.error(resolvedMessage, { keepAliveOnHover: true })
+  } catch {
+    // Toast availability must not change the request outcome.
+  }
+  // Do not retain Axios config/request bodies containing passwords in errors.
+  return Promise.reject({ code, message: resolvedMessage })
+}
 
+export function reqResolve(config) {
+  if (config.noNeedToken) return config
   const token = getToken()
   if (token) {
+    config.headers = config.headers || {}
     config.headers.token = config.headers.token || token
   }
-
   return config
 }
 
@@ -27,37 +45,15 @@ export function resResolve(response) {
     return Promise.resolve(data)
   }
   if (data?.code !== 200) {
-    const code = data?.code ?? status
-    /** 根据code处理对应的操作，并返回处理后的message */
-    const message = resolveResError(code, data?.msg ?? statusText)
-    window.$message?.error(message, { keepAliveOnHover: true })
-    return Promise.reject({ code, message, error: data || response })
+    return rejectResponse(data?.code ?? status, data?.msg ?? statusText, config, status)
   }
   return Promise.resolve(data)
 }
 
-export async function resReject(error) {
-  if (!error || !error.response) {
-    const code = error?.code
-    /** 根据code处理对应的操作，并返回处理后的message */
-    const message = resolveResError(code, error.message)
-    window.$message?.error(message)
-    return Promise.reject({ code, message, error })
+export function resReject(error) {
+  if (!error?.response) {
+    return rejectResponse(error?.code, error?.message, error?.config)
   }
   const { data, status } = error.response
-
-  if (data?.code === 401) {
-    try {
-      const userStore = useUserStore()
-      userStore.logout()
-    } catch (error) {
-      console.log('resReject error', error)
-      return
-    }
-  }
-  // 后端返回的response数据
-  const code = data?.code ?? status
-  const message = resolveResError(code, data?.msg ?? error.message)
-  window.$message?.error(message, { keepAliveOnHover: true })
-  return Promise.reject({ code, message, error: error.response?.data || error.response })
+  return rejectResponse(data?.code ?? status, data?.msg ?? error.message, error.config, status)
 }

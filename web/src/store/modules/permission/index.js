@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia'
+import { shallowRef } from 'vue'
 import { basicRoutes, vueModules } from '@/router/routes'
 import Layout from '@/layout/index.vue'
 import api from '@/api'
+import { useUserStore } from '@/store/modules/user'
+import { filterBusinessMenus } from '@/utils/auth/business'
+import { captureSession, assertCurrentSession } from '@/utils/auth/session'
 
 // * 后端路由相关函数
 // 根据后端传来数据构建出前端路由
@@ -66,10 +70,15 @@ export const usePermissionStore = defineStore('permission', {
   },
   getters: {
     routes() {
-      return basicRoutes.concat(this.accessRoutes)
+      return basicRoutes
+        .concat(this.accessRoutes)
+        .filter(
+          (route, index, routes) => routes.findIndex((item) => item.path === route.path) === index
+        )
     },
     menus() {
-      return this.routes.filter((route) => route.name && !route.isHidden)
+      const user = useUserStore().userInfo
+      return filterBusinessMenus(this.routes, user).filter((route) => route.name && !route.isHidden)
     },
     apis() {
       return this.accessApis
@@ -77,12 +86,18 @@ export const usePermissionStore = defineStore('permission', {
   },
   actions: {
     async generateRoutes() {
+      const session = captureSession()
       const res = await api.getUserMenu() // 调用接口获取后端传来的菜单路由
+      assertCurrentSession(session)
+      if (!Array.isArray(res.data)) throw new Error('INVALID_MENU_RESPONSE')
       this.accessRoutes = buildRoutes(res.data) // 处理成前端路由格式
       return this.accessRoutes
     },
     async getAccessApis() {
+      const session = captureSession()
       const res = await api.getUserApi()
+      assertCurrentSession(session)
+      if (!Array.isArray(res.data)) throw new Error('INVALID_API_RESPONSE')
       this.accessApis = res.data
       return this.accessApis
     },

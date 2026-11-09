@@ -1,4 +1,5 @@
-﻿"""手动 Emoji 记录、历史和统计 REST API。"""
+from app.utils.time import format_beijing
+"""手动 Emoji 记录、历史和统计 REST API。"""
 
 from datetime import datetime
 
@@ -6,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from app.controllers.emoji import emoji_controller
+from app.controllers.session import session_controller
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependAuth
 from app.models import Course, User
@@ -15,6 +17,14 @@ from app.schemas.emoji import EmojiCreate
 from app.services.export import build_csv_bytes
 
 router = APIRouter()
+
+
+def _validate_time_range(from_time, to_time):
+    for value in (from_time, to_time):
+        if value is not None and value.utcoffset() is not None:
+            raise HTTPException(422, "Use Shanghai local time without a timezone offset")
+    if from_time is not None and to_time is not None and from_time > to_time:
+        raise HTTPException(422, "from_time must not be later than to_time")
 
 
 async def _dict(obj):
@@ -46,6 +56,7 @@ async def list_emoji(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
+    _validate_time_range(from_time, to_time)
     actor_id = CTX_USER_ID.get()
     actor = await User.get(id=actor_id)
     await _require_teacher_or_admin(actor)
@@ -127,7 +138,7 @@ async def export_emoji(
             _enum_value(record.source),
             record.confidence if record.confidence is not None else "",
             record.device_source or "",
-            record.timestamp.strftime("%Y-%m-%d %H:%M:%S") if record.timestamp else "",
+            format_beijing(record.timestamp, "%Y-%m-%d %H:%M:%S") if record.timestamp else "",
         ]
         for record in records
     ]
@@ -146,16 +157,37 @@ async def create_emoji(payload: EmojiCreate):
 
 
 @router.get("/history", response_model=None, dependencies=[DependAuth], summary="查询 Emoji 历史")
-async def emoji_history(user_id: int | None = None, session_id: int | None = None, from_time: datetime | None = None, to_time: datetime | None = None, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+async def emoji_history(
+    user_id: int | None = None,
+    session_id: int | None = None,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    _validate_time_range(from_time, to_time)
     actor_id = CTX_USER_ID.get()
-    total, records = await emoji_controller.get_user_history(user_id or actor_id, actor_id, session_id, from_time, to_time, page, page_size)
+    total, records = await emoji_controller.get_user_history(
+        user_id or actor_id, actor_id, session_id, from_time, to_time, page, page_size
+    )
     return SuccessExtra(data=[await _dict(item) for item in records], total=total, page=page, page_size=page_size)
 
 
 @router.get("/statistics", response_model=None, dependencies=[DependAuth], summary="查询 Emoji 统计")
-async def emoji_statistics(session_id: int | None = None, user_id: int | None = None, from_time: datetime | None = None, to_time: datetime | None = None):
+async def emoji_statistics(
+    session_id: int | None = Query(None, gt=0),
+    user_id: int | None = Query(None, gt=0),
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+    source: EmojiSource | None = None,
+):
+    _validate_time_range(from_time, to_time)
     actor_id = CTX_USER_ID.get()
+    if session_id is not None:
+        await session_controller.get_for_actor(session_id, actor_id)
     if user_id is not None and user_id != actor_id:
         await emoji_controller.get_user_history(user_id, actor_id, session_id, from_time, to_time, 1, 1)
-    data = await emoji_controller.statistics(session_id, user_id or (actor_id if session_id is None else None), from_time, to_time)
+    data = await emoji_controller.statistics(
+        session_id, user_id or (actor_id if session_id is None else None), from_time, to_time, source
+    )
     return Success(data=data)

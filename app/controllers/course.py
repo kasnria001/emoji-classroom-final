@@ -44,6 +44,14 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
         return await self.list(page=page, page_size=page_size, search=search, order=["-created_at"])
 
     async def create_course(self, obj_in: CourseCreate, actor_id: int | None = None) -> Course:
+        if actor_id is not None:
+            actor = await self._require_user(actor_id)
+            if (
+                not actor.is_superuser
+                and await actor.roles.filter(name="STUDENT").exists()
+                and not await actor.roles.filter(name="TEACHER").exists()
+            ):
+                raise HTTPException(status_code=403, detail="Students cannot create courses")
         teacher_id = obj_in.teacher_id if actor_id is None else actor_id
         await self._require_user(teacher_id)
         if actor_id is not None and obj_in.teacher_id != actor_id:
@@ -73,6 +81,9 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
         return await self.update(obj_in.id, values)
 
     async def delete_course(self, course_id: int, actor_id: int) -> None:
+        actor = await self._require_user(actor_id)
+        if not actor.is_superuser:
+            raise HTTPException(status_code=403, detail="Only administrators can delete courses")
         await self.get_for_actor(course_id, actor_id)
         await self.remove(course_id)
 

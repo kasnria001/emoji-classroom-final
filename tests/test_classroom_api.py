@@ -156,7 +156,7 @@ async def test_student_must_be_scheduled_to_send_emoji(client):
     assert resp.status_code == 403
 
 
-async def test_course_update_and_delete_use_path_id(client):
+async def test_course_update_uses_path_id_and_teacher_cannot_delete(client):
     headers = {"token": client.teacher_token}
     course_id = await _create_course(client, name="软件工程")
 
@@ -169,10 +169,10 @@ async def test_course_update_and_delete_use_path_id(client):
     assert resp.json()["data"]["name"] == "软件工程（改）"
 
     resp = await client.delete(f"/api/v1/courses/{course_id}", headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 403
 
     resp = await client.get("/api/v1/courses", headers=headers)
-    assert all(item["id"] != course_id for item in resp.json()["data"])
+    assert any(item["id"] == course_id for item in resp.json()["data"])
 
 
 async def test_session_update_uses_path_id(client):

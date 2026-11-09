@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from fastapi.exceptions import HTTPException
@@ -8,6 +7,7 @@ from app.models.admin import User
 from app.schemas.login import CredentialsSchema
 from app.schemas.users import UserCreate, UserUpdate
 from app.utils.password import get_password_hash, verify_password
+from app.utils.time import beijing_now
 
 from .role import role_controller
 
@@ -29,7 +29,7 @@ class UserController(CRUDBase[User, UserCreate, UserUpdate]):
 
     async def update_last_login(self, id: int) -> None:
         user = await self.model.get(id=id)
-        user.last_login = datetime.now()
+        user.last_login = beijing_now()
         await user.save()
 
     async def authenticate(self, credentials: CredentialsSchema) -> Optional["User"]:

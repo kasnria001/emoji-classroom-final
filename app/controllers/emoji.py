@@ -92,7 +92,7 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
             filters["timestamp__gte"] = from_time
         if to_time is not None:
             filters["timestamp__lte"] = to_time
-        query = self.model.filter(**filters).order_by("-timestamp")
+        query = self.model.filter(**filters).order_by("-timestamp", "-id")
         total = await query.count()
         records = await query.offset((page - 1) * page_size).limit(page_size)
         return total, records
@@ -125,8 +125,11 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         user_id: int | None = None,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
+        source: EmojiSource | None = None,
     ) -> list[dict]:
         filters = {}
+        if source is not None:
+            filters["source"] = source
         if session_id is not None:
             filters["session_id"] = session_id
         if user_id is not None:
@@ -192,7 +195,7 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         if to_time is not None:
             query = query.filter(timestamp__lte=to_time)
         total = await query.count()
-        records = await query.order_by("-timestamp").offset((page - 1) * page_size).limit(page_size)
+        records = await query.order_by("-timestamp", "-id").offset((page - 1) * page_size).limit(page_size)
         return total, records
 
     async def export_records(

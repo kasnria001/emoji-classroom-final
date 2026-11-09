@@ -1,3 +1,4 @@
+from app.utils.time import format_beijing
 """课堂情绪统计服务。
 
 负责把 EmojiRecord 按课程、班级、时间段等维度聚合成管理端统计图表
@@ -70,8 +71,8 @@ async def get_statistics(
         course_counter[(record.session.course_id, course_name)] += 1
         class_counter[record.session.class_name or "未分班"] += 1
         if record.timestamp is not None:
-            day_counter[record.timestamp.strftime("%Y-%m-%d")] += 1
-            hour_counter[record.timestamp.strftime("%H:00")] += 1
+            day_counter[format_beijing(record.timestamp, "%Y-%m-%d")] += 1
+            hour_counter[format_beijing(record.timestamp, "%H:00")] += 1
 
     def _sort(counter: Counter) -> list[dict]:
         return [{"key": key, "count": count} for key, count in counter.most_common()]
@@ -136,7 +137,7 @@ async def get_realtime_dashboard(
         if record.user_id is not None:
             student_ids.add(record.user_id)
         if record.timestamp is not None:
-            minute_counter[record.timestamp.strftime("%Y-%m-%d %H:%M")] += 1
+            minute_counter[format_beijing(record.timestamp, "%Y-%m-%d %H:%M")] += 1
 
     return {
         "found": True,
@@ -147,8 +148,8 @@ async def get_realtime_dashboard(
             "course_name": session.course.name if session.course else "",
             "class_name": session.class_name,
             "classroom": session.classroom,
-            "start_time": session.start_time.strftime("%Y-%m-%d %H:%M:%S") if session.start_time else None,
-            "end_time": session.end_time.strftime("%Y-%m-%d %H:%M:%S") if session.end_time else None,
+            "start_time": format_beijing(session.start_time, "%Y-%m-%d %H:%M:%S") if session.start_time else None,
+            "end_time": format_beijing(session.end_time, "%Y-%m-%d %H:%M:%S") if session.end_time else None,
         },
         "summary": [
             {"emoji_type": key, "count": count, "percentage": _ratio(count, total)}

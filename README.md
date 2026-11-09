@@ -17,7 +17,7 @@
 - **JWT鉴权**：使用 JSON Web Token（JWT）进行身份验证和授权，增强应用的安全性。
 - **细粒度权限控制**：实现按钮和接口级别的权限控制，确保不同用户或角色在界面操作和接口访问时具有不同的权限限制。
 
-### 在线预览
+### 在线预览（原框架参考，非本项目业务演示）
 - [http://47.111.145.81:3000](http://47.111.145.81:3000)
 - username: admin
 - password: 123456
@@ -44,117 +44,104 @@
 
 ![image](https://github.com/mizhexiaoxiao/vue-fastapi-admin/blob/main/deploy/sample-picture/api.jpg)
 
-### 快速开始
-#### 方法一：dockerhub拉取镜像
+## 本地快速运行（当前项目，Windows PowerShell）
 
-```sh
-docker pull mizhexiaoxiao/vue-fastapi-admin:latest 
-docker run -d --restart=always --name=vue-fastapi-admin -p 9999:80 mizhexiaoxiao/vue-fastapi-admin
+新用户按本节启动即可体验 A/B/C 业务。使用 SQLite，无需安装 MySQL；上方在线预览是原框架参考，不是本项目。
+
+### 1. 准备环境并取得代码
+
+- Python 3.11，安装时启用 PATH / Python Launcher。
+- Node.js 20（本项目要求至少 Node 18.8；pnpm 9 要求至少 Node 18.12）。
+- Git。终端路径含空格时使用引号。
+
+```powershell
+git clone https://github.com/xzhnb666/emoji-classroom-final.git
+cd emoji-classroom-final
+py -3.11 --version
+node --version
+npm --version
 ```
 
-#### 方法二：dockerfile构建镜像
-##### docker安装(版本17.05+)
+已经下载或克隆项目的用户直接进入自己的仓库根目录，不必重复 clone。B 功能若还在开发分支，先获取包含 B 提交的版本；本地未提交文件不会自动包含在别人克隆的仓库中。
 
-```sh
-yum install -y docker-ce
-systemctl start docker
+### 2. 安装后端依赖
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-##### 构建镜像
+无需激活虚拟环境。Windows 请使用 requirements.txt，避免当前 pyproject.toml 中 uvloop 的平台兼容问题。
 
-```sh
-git clone https://github.com/mizhexiaoxiao/vue-fastapi-admin.git
-cd vue-fastapi-admin
-docker build --no-cache . -t vue-fastapi-admin
+### 3. 配置本地数据库
+
+第一次使用时复制配置模板；已有 .env 时只编辑，不能覆盖原有配置：
+
+```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
 ```
 
-##### 启动容器
+将 .env 中 DB_ENGINE 改成下面一行，其余 MySQL 字段在 SQLite 模式下不使用：
 
-```sh
-docker run -d --restart=always --name=vue-fastapi-admin -p 9999:80 vue-fastapi-admin
+```ini
+DB_ENGINE=sqlite
 ```
 
-##### 访问
+建议在本机生成随机密钥，再作为 SECRET_KEY 的值填写到 .env，不要提交该文件：
 
-http://localhost:9999
-
-username：admin
-
-password：123456
-
-### 本地启动
-#### 后端
-启动项目需要以下环境：
-- Python 3.11
-
-#### 方法一（推荐）：使用 uv 安装依赖
-1. 安装 uv
-```sh
-pip install uv
+```powershell
+.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-2. 创建并激活虚拟环境
-```sh
-uv venv
-source .venv/bin/activate  # Linux/Mac
-# 或
-.\.venv\Scripts\activate  # Windows
+.env 由仓库根目录加载，务必从根目录启动后端。SQLite 数据文件是根目录 db.sqlite3。首次启动会创建表、管理员、菜单/API 等数据，可能生成本地迁移文件；无需手工执行 aerich init/migrate/upgrade。已有数据库先备份，不要删除数据库或迁移目录来处理启动错误。B 本阶段没有新增数据模型或数据库结构变更。
+
+### 4. 启动后端（终端一）
+
+```powershell
+.\.venv\Scripts\python.exe run.py
 ```
 
-3. 安装依赖
-```sh
-uv add pyproject.toml
-```
+看到 Application startup complete 后，打开 http://localhost:9999/docs，确认 Swagger 能加载。终端保持运行。如果提示端口占用，先确认是否已有本项目服务，不要同时启动两份后端。
 
-4. 启动服务
-```sh
-python run.py
-```
+### 5. 安装并启动前端（终端二）
 
-#### 方法二：使用 Pip 安装依赖
-1. 创建虚拟环境
-```sh
-python3 -m venv venv
-```
+在另一个终端进入同一仓库，然后执行：
 
-2. 激活虚拟环境
-```sh
-source venv/bin/activate  # Linux/Mac
-# 或
-.\venv\Scripts\activate  # Windows
-```
-
-3. 安装依赖
-```sh
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-4. 启动服务
-```sh
-python run.py
-```
-
-服务现在应该正在运行，访问 http://localhost:9999/docs 查看API文档
-
-#### 前端
-启动项目需要以下环境：
-- node v18.8.0+
-
-1. 进入前端目录
-```sh
+```powershell
 cd web
-```
-
-2. 安装依赖(建议使用pnpm: https://pnpm.io/zh/installation)
-```sh
-npm i -g pnpm # 已安装可忽略
-pnpm i # 或者 npm i
-```
-
-3. 启动
-```sh
+npm install --global pnpm@9
+pnpm install --frozen-lockfile
 pnpm dev
 ```
+
+仓库有 pnpm-lock.yaml（v9），不要混用 npm install 生成另一份依赖锁。默认打开 http://localhost:3100；若 Vite 提示其他端口，以终端为准。后端 9999 是 API，不是前端网页。
+
+前端所需配置已在 web/.env、web/.env.development 中：VITE_PORT=3100、VITE_USE_PROXY=true、VITE_BASE_API=/api/v1。web/build/constant.js 把 /api/v1 代理到 http://127.0.0.1:9999。如后端换端口，须同步改代理并重启 Vite。若克隆版本缺少前端环境文件，在 web/.env 填入上述配置以及 VITE_PUBLIC_PATH=/、VITE_USE_HASH=false 后重启。
+
+### 6. 首次登录与关闭
+
+全新空库由 init_superuser 创建开发管理员，用户名 admin，初始密码 123456（公开的初始化值，不是部署凭证）。先用它进入管理端并修改密码；已有库不会重置为该值。学生请从公开注册入口注册，不要用管理员作为学生/教师演示账号。
+
+前端和后端终端分别按 Ctrl+C 退出即可，不会删除 SQLite 数据。再次运行时只需执行步骤 4、5 中的启动命令，不必重装依赖。修改后端 .env 后重启后端；修改前端环境或代理后重启前端。
+
+MySQL 用户可参考下方 A 模块数据库说明；本地快速体验无需执行。
+
+### 常见启动问题
+
+| 现象 | 检查方法 |
+| --- | --- |
+| py / node / pnpm 找不到 | 检查安装和 PATH，重新打开终端；pnpm 安装失败时检查 npm 全局目录权限 |
+| Windows 安装 uvloop 失败 | 使用 requirements.txt，不用当前 pyproject.toml 直接安装 |
+| 无法连接 MySQL | 快速体验应确认 DB_ENGINE=sqlite；MySQL 模式检查服务、账号、库名、字符集 |
+| 登录提示网络错误或代理 ECONNREFUSED | 确认后端已完成启动、9999/docs 能访问、前端代理目标正确 |
+| 默认管理员登录失败 | 仅空库自动创建默认账号；确认当前连接的库，不能靠删库重置密码 |
+| 注册成功但课堂为空 | 需要管理员给该学生排课，注册不会自动加入课堂 |
+| 分配教师后仍无课程 | 角色和课程归属分别配置；创建课程时填写该教师真实用户 ID，退出重登 |
+| 403 / 无权限 | 核对账号角色、课程归属与排课，不要给普通测试用户开启超级管理员绕过 |
+| 创建课堂日期校验失败 | 使用当前日期选择器，结束晚于开始；接口传 YYYY-MM-DDTHH:mm:ss，不拼接毫秒时间戳 |
+| Aerich / 表已存在错误 | 保存完整异常，核对当前 DB_ENGINE、数据库和迁移历史，由 A 处理；不要清库或删除迁移目录 |
 
 ### 目录说明
 
@@ -256,7 +243,7 @@ pnpm dev
 
 统一响应格式为 `{code, msg, data}`，分页接口额外带 `total`、`page`、`page_size`。
 
-路由模块已在 `app/api/v1/courses/__init__.py`、`app/api/v1/sessions/__init__.py`、`app/api/v1/emoji/__init__.py` 中导出（自带前缀和 tags）。合并时在 `app/api/v1/__init__.py` 中注册即可：
+路由模块已导出并在 `app/api/v1/__init__.py` 注册。以下为当前注册方式示意，无需新用户重复修改：
 
 ```python
 from .courses import courses_router
@@ -468,6 +455,53 @@ pytest
 - `tests/test_classroom_schemas.py`：A 模块 Schema 单元测试，覆盖课程名称、课堂时间区间、手动/AI Emoji 的置信度约束。
 - `tests/test_classroom_api.py`：A 模块接口测试，覆盖课程增删查、课堂会话创建与时间校验、排课、手动 Emoji 提交、来源约束以及教师/学生数据归属校验。
 - `tests/test_classroom_admin.py`：C 模块接口测试，覆盖管理端统计、实时看板、CSV 导出（含注入防护）、Emoji 列表、排课列表以及学生越权拦截。
+
+## 情绪课堂模块（B）：学生与教师客户端
+
+基于现有 Vue 3、JavaScript、Naive UI 和 Axios 实现，先按上方“本地快速运行”启动前后端。
+
+| 身份 | 功能 | 页面 |
+| --- | --- | --- |
+| 未登录 | 学生注册、登录 | /register、/login |
+| 学生 | 查看已排课堂、手动提交 Emoji | /student/classroom |
+| 学生 | 个人历史、课堂/时间筛选、分页 | /student/history |
+| 教师 | 所授课程和课堂列表 | /teacher/classroom |
+| 教师 | 课堂历史、筛选、分页、情绪数量与占比 | /teacher/classroom/detail?session_id=实际课堂ID |
+| 学生/教师 | 修改密码、只读个人资料 | 头像菜单 → 个人资料 |
+
+### 使用步骤
+
+1. 管理员登录，在角色管理创建或复用 TEACHER，在用户管理创建教师并分配该角色；不要开启超级管理员。
+2. 学生从登录页公开注册，填写用户名、邮箱及两次相同密码（8～128 字符），服务端自动分配 STUDENT。
+3. 管理员创建课程，授课教师填写该教师的真实用户 ID；创建课堂，填写班级、教室及起止时间。
+4. 在课堂排课入口加入学生的真实用户 ID。角色分配不等于排课，用户 ID 可从用户表查看。
+5. 学生登录 → 我的课堂 → 选择课堂和 Emoji → 提交 → 查看个人历史。
+6. 对应教师登录 → 选择课程 → 打开课堂 → 查看历史和基础统计。两种角色均可从头像菜单修改密码；双角色可切换入口。
+
+情绪为 HAPPY 😀、SAD 😢、ANGRY 😠、SURPRISED 😮、NEUTRAL 😐。手动来源固定 MANUAL，提交中禁止重复点击；结果不确定时先核对历史，再决定是否重试。学生没有匿名提交入口。
+
+业务时间统一北京时间（UTC+8）。筛选修改后点击查询生效，起止时间均包含；历史使用服务端分页，统计覆盖完整筛选范围，不随翻页改变。统计按记录条数计算，默认包含 MANUAL+AI，缺失类型补零。
+
+管理员和教师均不能给教师账号排课（包括双角色及已有授课课程的账号）；排课应选择学生用户 ID。已有排课不会自动删除。
+
+课程和课堂会话删除仅限管理员：教师界面不显示删除按钮，直接调用删除接口也返回 403。
+
+### 测试和限制
+
+仓库根目录执行后端测试（独立 SQLite，不修改业务库）：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --basetemp=.venv/b-local-tests
+```
+
+web 目录执行：
+
+```powershell
+pnpm run test:auth
+node tests/session-date.test.mjs
+pnpm run build
+```
+
 
 ## 课堂情绪模块（C）：管理端看板与统计
 

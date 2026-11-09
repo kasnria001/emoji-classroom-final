@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
+from fastapi import HTTPException
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from tortoise.transactions import in_transaction
+from app.models import Course, ScheduleUser
 
 from app.controllers.user import user_controller
 from app.core.ctx import CTX_USER_ID
@@ -14,6 +18,30 @@ from app.utils.jwt_utils import create_access_token
 from app.utils.password import get_password_hash, verify_password
 
 router = APIRouter()
+
+
+class StudentRegister(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=20, pattern=r"^\S+$")
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/register", summary="注册学生")
+async def register_student(payload: StudentRegister):
+    async with in_transaction():
+        if await User.filter(username=payload.username).exists() or await User.filter(email=payload.email).exists():
+            raise HTTPException(409, "用户名或邮箱已存在")
+        user = await User.create(
+            username=payload.username,
+            email=str(payload.email),
+            password=get_password_hash(payload.password),
+            is_active=True,
+            is_superuser=False,
+        )
+        role, _ = await Role.get_or_create(name="STUDENT", defaults={"desc": "学生"})
+        await user.roles.add(role)
+    return Success(data={"id": user.id, "username": user.username})
 
 
 @router.post("/access_token", summary="获取token")
@@ -43,6 +71,14 @@ async def get_userinfo():
     user_obj = await user_controller.get(id=user_id)
     data = await user_obj.to_dict(exclude_fields=["password"])
     data["avatar"] = "https://avatars.githubusercontent.com/u/54677442?v=4"
+    # Stable server-derived capabilities; legacy course/schedule ownership remains valid.
+    names = await user_obj.roles.all().values_list("name", flat=True)
+    codes = [code for code in ["STUDENT", "TEACHER"] if code in names]
+    if await Course.filter(teacher_id=user_id).exists() and "TEACHER" not in codes:
+        codes.append("TEACHER")
+    if await ScheduleUser.filter(user_id=user_id).exists() and "STUDENT" not in codes:
+        codes.append("STUDENT")
+    data["role_codes"] = codes
     return Success(data=data)
 
 

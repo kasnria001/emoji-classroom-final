@@ -11,10 +11,12 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import { formatDate, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
+import { useUserStore } from '@/store'
 
 defineOptions({ name: '课程管理' })
 
 const $table = ref(null)
+const userStore = useUserStore()
 const queryItems = ref({})
 
 const {
@@ -72,27 +74,34 @@ const columns = [
           },
           { default: () => '编辑', icon: renderIcon('material-symbols:edit', { size: 16 }) }
         ),
-        h(
-          NPopconfirm,
-          { onPositiveClick: () => handleDelete({ course_id: row.id }) },
-          {
-            trigger: () =>
-              h(
-                NButton,
-                { size: 'small', type: 'error' },
-                { default: () => '删除', icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
-              ),
-            default: () => h('div', {}, '确定删除该课程吗?'),
-          }
-        ),
-      ]
+        userStore.isSuperUser
+          ? h(
+              NPopconfirm,
+              { onPositiveClick: () => handleDelete({ course_id: row.id }) },
+              {
+                trigger: () =>
+                  h(
+                    NButton,
+                    { size: 'small', type: 'error' },
+                    {
+                      default: () => '删除',
+                      icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                    }
+                  ),
+                default: () => h('div', {}, '确定删除该课程吗?'),
+              }
+            )
+          : null,
+      ].filter(Boolean)
     },
   },
 ]
 
 const rules = {
   name: [{ required: true, message: '请输入课程名称', trigger: ['input', 'blur'] }],
-  teacher_id: [{ required: true, type: 'number', message: '请输入教师ID', trigger: ['input', 'blur'] }],
+  teacher_id: [
+    { required: true, type: 'number', message: '请输入教师ID', trigger: ['input', 'blur'] },
+  ],
 }
 </script>
 
@@ -104,7 +113,12 @@ const rules = {
       </NButton>
     </template>
 
-    <CrudTable ref="$table" v-model:query-items="queryItems" :columns="columns" :get-data="api.getCourses">
+    <CrudTable
+      ref="$table"
+      v-model:query-items="queryItems"
+      :columns="columns"
+      :get-data="api.getCourses"
+    >
       <template #queryBar>
         <QueryBarItem label="课程名称" :label-width="70">
           <NInput
@@ -117,8 +131,19 @@ const rules = {
       </template>
     </CrudTable>
 
-    <CrudModal v-model:visible="modalVisible" :title="modalTitle" :loading="modalLoading" @save="handleSave">
-      <NForm ref="modalFormRef" label-placement="left" :label-width="80" :model="modalForm" :rules="rules">
+    <CrudModal
+      v-model:visible="modalVisible"
+      :title="modalTitle"
+      :loading="modalLoading"
+      @save="handleSave"
+    >
+      <NForm
+        ref="modalFormRef"
+        label-placement="left"
+        :label-width="80"
+        :model="modalForm"
+        :rules="rules"
+      >
         <NFormItem label="课程名称" path="name">
           <NInput v-model:value="modalForm.name" clearable placeholder="请输入课程名称" />
         </NFormItem>
@@ -126,7 +151,11 @@ const rules = {
           <NInputNumber v-model:value="modalForm.teacher_id" clearable placeholder="请输入教师ID" />
         </NFormItem>
         <NFormItem label="课程描述" path="description">
-          <NInput v-model:value="modalForm.description" type="textarea" placeholder="请输入课程描述" />
+          <NInput
+            v-model:value="modalForm.description"
+            type="textarea"
+            placeholder="请输入课程描述"
+          />
         </NFormItem>
       </NForm>
     </CrudModal>
