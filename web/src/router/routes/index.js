@@ -1,12 +1,67 @@
 import i18n from '~/i18n'
+import { useUserStore } from '@/store/modules/user'
 const { t } = i18n.global
 
 const Layout = () => import('@/layout/index.vue')
 
 export const basicRoutes = [
   {
+    name: 'Account',
+    path: '/account',
+    component: Layout,
+    isHidden: true,
+    children: [
+      { path: '', name: 'AccountHome', component: () => import('@/views/account/index.vue') },
+    ],
+  },
+  ...['STUDENT', 'TEACHER'].map((role) => ({
+    name: 'Business-' + role,
+    path: role === 'STUDENT' ? '/student/classroom' : '/teacher/classroom',
+    component: Layout,
+    meta: {
+      title: t(role === 'STUDENT' ? 'auth.studentEntry' : 'auth.teacherEntry'),
+      businessRole: role,
+      icon: 'mdi:school-outline',
+      order: 2,
+    },
+    children: [
+      {
+        path: '',
+        name: 'BusinessHome-' + role,
+        component:
+          role === 'STUDENT'
+            ? () => import('@/views/student/classroom/index.vue')
+            : () => import('@/views/teacher/classroom/index.vue'),
+        meta: { businessRole: role },
+      },
+    ],
+  })),
+  ...[
+    {
+      name: 'StudentHistory',
+      path: '/student/history',
+      role: 'STUDENT',
+      component: () => import('@/views/student/history/index.vue'),
+    },
+    {
+      name: 'TeacherClassroomDetail',
+      path: '/teacher/classroom/detail',
+      role: 'TEACHER',
+      component: () => import('@/views/teacher/classroom-detail/index.vue'),
+    },
+  ].map((item) => ({
+    name: item.name + 'Layout',
+    path: item.path,
+    component: Layout,
+    isHidden: true,
+    meta: { businessRole: item.role },
+    children: [
+      { path: '', name: item.name, component: item.component, meta: { businessRole: item.role } },
+    ],
+  })),
+  {
     path: '/',
-    redirect: '/workbench', // 默认跳转到首页
+    redirect: () => useUserStore().defaultPath,
     meta: { order: 0 },
   },
   {
@@ -115,6 +170,13 @@ export const basicRoutes = [
     meta: {
       title: '登录页',
     },
+  },
+  {
+    name: 'Register',
+    path: '/register',
+    component: () => import('@/views/register/index.vue'),
+    isHidden: true,
+    meta: { title: t('auth.register') },
   },
 ]
 

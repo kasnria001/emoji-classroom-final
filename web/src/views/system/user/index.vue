@@ -67,6 +67,13 @@ onMounted(() => {
 
 const columns = [
   {
+    title: '用户 ID',
+    key: 'id',
+    width: 90,
+    align: 'center',
+    render: (row) => h('span', { style: { userSelect: 'text' } }, String(row.id)),
+  },
+  {
     title: '名称',
     key: 'username',
     width: 60,

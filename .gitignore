@@ -9,6 +9,15 @@ venv/
 migrations/
 .env
 
+# Local environment settings may contain passwords and tokens.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local migration backups created during database setup.
+/migrations-backup-*/
+
 db.sqlite3
 db.sqlite3-journal
 db.sqlite3-shm

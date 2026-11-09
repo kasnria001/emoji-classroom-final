@@ -1,4 +1,9 @@
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 /**
  * @desc  格式化时间
@@ -7,7 +12,10 @@ import dayjs from 'dayjs'
  * @returns {string | null}
  */
 export function formatDateTime(time = undefined, format = 'YYYY-MM-DD HH:mm:ss') {
-  return dayjs(time).format(format)
+  if (time === null || time === '') return '—'
+  const naive = typeof time === 'string' && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(time)
+  const value = naive ? dayjs.tz(time, 'Asia/Shanghai') : dayjs(time).tz('Asia/Shanghai')
+  return value.isValid() ? value.format(format) : '—'
 }
 
 export function formatDate(date = undefined, format = 'YYYY-MM-DD') {

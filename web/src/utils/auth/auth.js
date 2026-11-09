@@ -2,11 +2,10 @@ import { router } from '@/router'
 
 export function toLogin() {
   const currentRoute = unref(router.currentRoute)
-  const needRedirect =
-    !currentRoute.meta.requireAuth && !['/404', '/login'].includes(router.currentRoute.value.path)
-  router.replace({
+  const needRedirect = !['/404', '/403', '/login', '/register'].includes(currentRoute.path)
+  return router.replace({
     path: '/login',
-    query: needRedirect ? { ...currentRoute.query, redirect: currentRoute.path } : {},
+    query: needRedirect ? { redirect: currentRoute.fullPath } : {},
   })
 }
 

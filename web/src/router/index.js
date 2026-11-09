@@ -3,6 +3,8 @@ import { setupRouterGuard } from './guard'
 import { basicRoutes, EMPTY_ROUTE, NOT_FOUND_ROUTE } from './routes'
 import { getToken, isNullOrWhitespace } from '@/utils'
 import { useUserStore, usePermissionStore } from '@/store'
+import { BUSINESS_HOMES } from '@/utils/auth/business'
+import { initializeSessionAccess } from '@/utils/auth/session'
 
 const isHash = import.meta.env.VITE_USE_HASH === 'true'
 export const router = createRouter({
@@ -12,12 +14,16 @@ export const router = createRouter({
 })
 
 export async function setupRouter(app) {
-  await addDynamicRoutes()
+  try {
+    await addDynamicRoutes()
+  } catch {
+    // Still mount the login page when restoring an expired session or offline.
+  }
   setupRouterGuard(router)
   app.use(router)
 }
 
-export async function resetRouter() {
+export function resetRouter() {
   const basicRouteNames = getRouteNames(basicRoutes)
   router.getRoutes().forEach((route) => {
     const name = route.name
@@ -38,20 +44,15 @@ export async function addDynamicRoutes() {
   // 登录后从后端加载菜单和 API 权限，再转换为动态路由。
   const userStore = useUserStore()
   const permissionStore = usePermissionStore()
-  !userStore.userId && (await userStore.getUserInfo())
-  try {
-    const accessRoutes = await permissionStore.generateRoutes()
-    await permissionStore.getAccessApis()
+  return initializeSessionAccess(userStore, permissionStore, (accessRoutes) => {
     accessRoutes.forEach((route) => {
+      // A backend menu for a B entry must not replace its guarded static route.
+      if (Object.values(BUSINESS_HOMES).includes(route.path)) return
       !router.hasRoute(route.name) && router.addRoute(route)
     })
     router.hasRoute(EMPTY_ROUTE.name) && router.removeRoute(EMPTY_ROUTE.name)
     router.addRoute(NOT_FOUND_ROUTE)
-  } catch (error) {
-    console.error('error', error)
-    const userStore = useUserStore()
-    await userStore.logout()
-  }
+  })
 }
 
 export function getRouteNames(routes) {

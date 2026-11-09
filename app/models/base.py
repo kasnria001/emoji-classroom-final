@@ -1,3 +1,4 @@
+from app.utils.time import format_beijing
 import asyncio
 from datetime import datetime
 
@@ -18,7 +19,7 @@ class BaseModel(models.Model):
             if field not in exclude_fields:
                 value = getattr(self, field)
                 if isinstance(value, datetime):
-                    value = value.strftime(settings.DATETIME_FORMAT)
+                    value = format_beijing(value, settings.DATETIME_FORMAT)
                 d[field] = value
 
         if m2m:
@@ -42,7 +43,7 @@ class BaseModel(models.Model):
             for k, v in value.items():
                 if k not in exclude_fields:
                     if isinstance(v, datetime):
-                        formatted_value[k] = v.strftime(settings.DATETIME_FORMAT)
+                        formatted_value[k] = format_beijing(v, settings.DATETIME_FORMAT)
                     else:
                         formatted_value[k] = v
             formatted_values.append(formatted_value)

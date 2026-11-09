@@ -17,19 +17,22 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
+import { useUserStore } from '@/store'
 
-import { formatDate, renderIcon } from '@/utils'
+import { formatDate, formatDateTime, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
 defineOptions({ name: '课堂会话' })
 
 const $table = ref(null)
+const userStore = useUserStore()
 const queryItems = ref({})
 
 const {
   modalVisible,
   modalTitle,
+  modalAction,
   modalLoading,
   handleSave,
   modalForm,
@@ -63,8 +66,20 @@ onMounted(() => {
 const columns = [
   { title: 'ID', key: 'id', width: 60, align: 'center' },
   { title: '课程ID', key: 'course_id', width: 80, align: 'center' },
-  { title: '开始时间', key: 'start_time', width: 180, align: 'center', render: (row) => formatDate(row.start_time) },
-  { title: '结束时间', key: 'end_time', width: 180, align: 'center', render: (row) => formatDate(row.end_time) },
+  {
+    title: '开始时间',
+    key: 'start_time',
+    width: 180,
+    align: 'center',
+    render: (row) => formatDateTime(row.start_time),
+  },
+  {
+    title: '结束时间',
+    key: 'end_time',
+    width: 180,
+    align: 'center',
+    render: (row) => formatDateTime(row.end_time),
+  },
   { title: '教室', key: 'classroom', width: 100, align: 'center', ellipsis: { tooltip: true } },
   { title: '班级', key: 'class_name', width: 120, align: 'center', ellipsis: { tooltip: true } },
   {
@@ -95,26 +110,33 @@ const columns = [
           },
           { default: () => '排课', icon: renderIcon('carbon:calendar', { size: 16 }) }
         ),
-        h(
-          NPopconfirm,
-          { onPositiveClick: () => handleDelete({ session_id: row.id }) },
-          {
-            trigger: () =>
-              h(
-                NButton,
-                { size: 'small', type: 'error' },
-                { default: () => '删除', icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
-              ),
-            default: () => h('div', {}, '确定删除该课堂会话吗?'),
-          }
-        ),
-      ]
+        userStore.isSuperUser
+          ? h(
+              NPopconfirm,
+              { onPositiveClick: () => handleDelete({ session_id: row.id }) },
+              {
+                trigger: () =>
+                  h(
+                    NButton,
+                    { size: 'small', type: 'error' },
+                    {
+                      default: () => '删除',
+                      icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                    }
+                  ),
+                default: () => h('div', {}, '确定删除该课堂会话吗?'),
+              }
+            )
+          : null,
+      ].filter(Boolean)
     },
   },
 ]
 
 const rules = {
-  course_id: [{ required: true, type: 'number', message: '请输入课程ID', trigger: ['input', 'blur'] }],
+  course_id: [
+    { required: true, type: 'number', message: '请输入课程ID', trigger: ['input', 'blur'] },
+  ],
   start_time: [{ required: true, message: '请选择开始时间', trigger: ['blur', 'change'] }],
   end_time: [{ required: true, message: '请选择结束时间', trigger: ['blur', 'change'] }],
 }
@@ -147,7 +169,7 @@ async function loadScheduledUsers() {
 
 async function handleAddSchedule() {
   if (!newUserId.value) {
-    $message.warning('请输入用户ID')
+    $message.warning('请输入学生用户ID（教师不可排课）')
     return
   }
   try {
@@ -179,7 +201,12 @@ async function handleRemoveSchedule(userId) {
       </NButton>
     </template>
 
-    <CrudTable ref="$table" v-model:query-items="queryItems" :columns="columns" :get-data="api.getSessions">
+    <CrudTable
+      ref="$table"
+      v-model:query-items="queryItems"
+      :columns="columns"
+      :get-data="api.getSessions"
+    >
       <template #queryBar>
         <QueryBarItem label="课程ID" :label-width="70">
           <NInputNumber
@@ -192,8 +219,19 @@ async function handleRemoveSchedule(userId) {
       </template>
     </CrudTable>
 
-    <CrudModal v-model:visible="modalVisible" :title="modalTitle" :loading="modalLoading" @save="handleSave">
-      <NForm ref="modalFormRef" label-placement="left" :label-width="80" :model="modalForm" :rules="rules">
+    <CrudModal
+      v-model:visible="modalVisible"
+      :title="modalTitle"
+      :loading="modalLoading"
+      @save="handleSave"
+    >
+      <NForm
+        ref="modalFormRef"
+        label-placement="left"
+        :label-width="80"
+        :model="modalForm"
+        :rules="rules"
+      >
         <NFormItem label="课程ID" path="course_id">
           <NInputNumber v-model:value="modalForm.course_id" clearable placeholder="请输入课程ID" />
         </NFormItem>
@@ -201,7 +239,7 @@ async function handleRemoveSchedule(userId) {
           <NDatePicker
             v-model:formatted-value="modalForm.start_time"
             type="datetime"
-            value-format="yyyy-MM-ddTHH:mm:ss"
+            value-format="yyyy-MM-dd'T'HH:mm:ss"
             clearable
             placeholder="请选择开始时间"
           />
@@ -210,7 +248,7 @@ async function handleRemoveSchedule(userId) {
           <NDatePicker
             v-model:formatted-value="modalForm.end_time"
             type="datetime"
-            value-format="yyyy-MM-ddTHH:mm:ss"
+            value-format="yyyy-MM-dd'T'HH:mm:ss"
             clearable
             placeholder="请选择结束时间"
           />
@@ -226,7 +264,12 @@ async function handleRemoveSchedule(userId) {
 
     <NModal v-model:show="scheduleVisible" preset="card" title="课堂排课" style="width: 600px">
       <div mb-15 flex items-center gap-10>
-        <NInputNumber v-model:value="newUserId" clearable placeholder="输入要安排的用户ID" style="width: 200px" />
+        <NInputNumber
+          v-model:value="newUserId"
+          clearable
+          placeholder="输入要安排的用户ID"
+          style="width: 200px"
+        />
         <NButton type="primary" @click="handleAddSchedule">安排用户</NButton>
       </div>
       <div v-if="scheduleLoading">加载中...</div>
@@ -235,7 +278,9 @@ async function handleRemoveSchedule(userId) {
         <div v-for="item in scheduledUsers" :key="item.id" flex items-center justify-between py-5>
           <NTag type="info">#{{ item.user_id }} {{ item.username || '匿名用户' }}</NTag>
           <span text-12 op-60>{{ formatDate(item.scheduled_at) }}</span>
-          <NButton size="tiny" type="error" @click="handleRemoveSchedule(item.user_id)">移除</NButton>
+          <NButton size="tiny" type="error" @click="handleRemoveSchedule(item.user_id)"
+            >移除</NButton
+          >
         </div>
       </div>
     </NModal>

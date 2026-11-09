@@ -8,6 +8,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
+import { formatDateTime } from '@/utils'
 
 defineOptions({ name: '审计日志' })
 
@@ -18,50 +19,13 @@ onMounted(() => {
   $table.value?.handleSearch()
 })
 
-function formatTimestamp(timestamp) {
-  const date = new Date(timestamp)
-
-  const pad = (num) => num.toString().padStart(2, '0')
-
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1) // 月份从0开始，所以需要+1
-  const day = pad(date.getDate())
-  const hours = pad(date.getHours())
-  const minutes = pad(date.getMinutes())
-  const seconds = pad(date.getSeconds())
-
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
-
-// 获取当天的开始时间的时间戳
-function getStartOfDayTimestamp() {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0) // 将小时、分钟、秒和毫秒都设置为0
-  return now.getTime()
-}
-
-// 获取当天的结束时间的时间戳
-function getEndOfDayTimestamp() {
-  const now = new Date()
-  now.setHours(23, 59, 59, 999) // 将小时设置为23，分钟设置为59，秒设置为59，毫秒设置为999
-  return now.getTime()
-}
-
-const startOfDayTimestamp = getStartOfDayTimestamp()
-const endOfDayTimestamp = getEndOfDayTimestamp()
-
-queryItems.value.start_time = formatTimestamp(startOfDayTimestamp)
-queryItems.value.end_time = formatTimestamp(endOfDayTimestamp)
-
-const datetimeRange = ref([startOfDayTimestamp, endOfDayTimestamp])
+const today = formatDateTime(undefined, 'YYYY-MM-DD')
+queryItems.value.start_time = today + ' 00:00:00'
+queryItems.value.end_time = today + ' 23:59:59'
+const datetimeRange = ref([queryItems.value.start_time, queryItems.value.end_time])
 const handleDateRangeChange = (value) => {
-  if (value == null) {
-    queryItems.value.start_time = null
-    queryItems.value.end_time = null
-  } else {
-    queryItems.value.start_time = formatTimestamp(value[0])
-    queryItems.value.end_time = formatTimestamp(value[1])
-  }
+  queryItems.value.start_time = value?.[0] ?? null
+  queryItems.value.end_time = value?.[1] ?? null
 }
 
 const methodOptions = [
@@ -272,11 +236,12 @@ const columns = [
         </QueryBarItem>
         <QueryBarItem label="操作时间" :label-width="70">
           <NDatePicker
-            v-model:value="datetimeRange"
+            v-model:formatted-value="datetimeRange"
+            value-format="yyyy-MM-dd HH:mm:ss"
             type="datetimerange"
             clearable
-            placeholder="请选择时间范围"
-            @update:value="handleDateRangeChange"
+            placeholder="请选择北京时间范围"
+            @update:formatted-value="handleDateRangeChange"
           />
         </QueryBarItem>
       </template>

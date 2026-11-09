@@ -6,7 +6,7 @@ from tortoise.expressions import Q
 
 from app.core.crud import CRUDBase
 from app.models.admin import User
-from app.models.classroom import ClassSession, ScheduleUser
+from app.models.classroom import ClassSession, Course, ScheduleUser
 from app.schemas.classroom import (
     ClassSessionCreate,
     ClassSessionUpdate,
@@ -61,6 +61,9 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
         return await self.update(obj_in.id, values)
 
     async def delete_session(self, session_id: int, actor_id: int) -> None:
+        actor = await self._require_user(actor_id)
+        if not actor.is_superuser:
+            raise HTTPException(status_code=403, detail="Only administrators can delete classroom sessions")
         await self.get_for_actor(session_id, actor_id)
         await self.remove(session_id)
 
@@ -81,7 +84,10 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
 
     async def schedule_user(self, obj_in: ScheduleUserCreate, actor_id: int) -> ScheduleUser:
         session = await self.get_for_actor(obj_in.session_id, actor_id)
-        await self._require_user(obj_in.user_id)
+        user = await self._require_user(obj_in.user_id)
+        # Match userinfo's teacher identity, including legacy course owners and dual roles.
+        if await user.roles.filter(name="TEACHER").exists() or await Course.filter(teacher_id=user.id).exists():
+            raise HTTPException(status_code=422, detail="不能为教师账号排课，请选择学生账号")
         if await ScheduleUser.filter(session_id=session.id, user_id=obj_in.user_id).exists():
             raise HTTPException(status_code=409, detail="User is already scheduled for this session")
         values = obj_in.model_dump(exclude_unset=True)

@@ -10,8 +10,12 @@ import App from './App.vue'
 import { setupDirectives } from './directives'
 import { useResize } from '@/utils'
 import i18n from '~/i18n'
+import { lStorage, sStorage } from '@/utils'
+import { clearLegacyPassword } from '@/utils/auth/forms'
 
 async function setupApp() {
+  clearLegacyPassword(lStorage)
+  clearLegacyPassword(sStorage)
   const app = createApp(App)
 
   setupStore(app)
