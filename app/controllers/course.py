@@ -64,10 +64,17 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
         return await self.create(obj_in)
 
     async def update_course(self, obj_in: CourseUpdate, actor_id: int) -> Course:
+        from app.services.ai_jobs import classroom_mutation
+
+        async with classroom_mutation(course_id=obj_in.id):
+            return await self._update_course(obj_in, actor_id)
+
+    async def _update_course(self, obj_in: CourseUpdate, actor_id: int) -> Course:
         course = await self.get_for_actor(obj_in.id, actor_id)
         if obj_in.teacher_id is not None and obj_in.teacher_id != course.teacher_id:
             from app.services.ai_jobs import guard_session_mutation
             from app.models import ClassSession
+
             await guard_session_mutation(await ClassSession.filter(course_id=course.id).values_list("id", flat=True))
             actor = await self._require_user(actor_id)
             if not actor.is_superuser:
@@ -84,12 +91,19 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
         return await self.update(obj_in.id, values)
 
     async def delete_course(self, course_id: int, actor_id: int) -> None:
+        from app.services.ai_jobs import classroom_mutation
+
+        async with classroom_mutation(course_id=course_id):
+            await self._delete_course(course_id, actor_id)
+
+    async def _delete_course(self, course_id: int, actor_id: int) -> None:
         actor = await self._require_user(actor_id)
         if not actor.is_superuser:
             raise HTTPException(status_code=403, detail="Only administrators can delete courses")
         await self.get_for_actor(course_id, actor_id)
         from app.services.ai_jobs import guard_session_mutation
         from app.models import ClassSession
+
         await guard_session_mutation(await ClassSession.filter(course_id=course_id).values_list("id", flat=True))
         await self.remove(course_id)
 

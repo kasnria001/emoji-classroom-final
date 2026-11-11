@@ -144,6 +144,10 @@ async def test_full_scope_idempotency_filter_and_existing_dashboard(ai_client):
     )
     assert dashboard.json()["data"]["ai_count"] == 1
     assert dashboard.json()["data"]["student_count"] == 0
+    admin_dashboard = await c.get(
+        "/api/v1/dashboard/realtime", headers=c.admin_headers, params={"session_id": c.session.id}
+    )
+    assert admin_dashboard.status_code == 200 and admin_dashboard.json()["data"]["ai_count"] == 1
     from app.models import AuditLog
 
     logs = await AuditLog.all()
@@ -239,6 +243,11 @@ async def test_worker_incarnation_conflict_and_safe_invalid_body(ai_client):
             content=chunks(),
         )
     ).status_code == 413
+    from app.models import AuditLog
+
+    logs = await AuditLog.all()
+    assert logs and all(log.request_args == {"metadata_only": True} for log in logs)
+    assert all(secret not in str(log.request_args) + str(log.response_body) for log in logs)
 
 
 async def test_incremental_api_initialization_retains_custom_grants(ai_client):

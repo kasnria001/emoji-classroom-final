@@ -204,7 +204,7 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         records = await query.order_by("-timestamp", "-id").offset((page - 1) * page_size).limit(page_size)
         return total, records
 
-    async def export_records(
+    def export_query(
         self,
         actor_id: int,
         is_superuser: bool,
@@ -217,8 +217,8 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
         class_name: str | None = None,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
-    ) -> list[EmojiRecord]:
-        """导出符合条件的全部 Emoji 记录，不参与分页。"""
+    ):
+        """保留原过滤条件，返回惰性查询供有界 keyset 导出。"""
 
         query = self.model.all().select_related("session__course", "user")
         if not is_superuser:
@@ -241,7 +241,29 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
             query = query.filter(timestamp__gte=from_time)
         if to_time is not None:
             query = query.filter(timestamp__lte=to_time)
-        return await query.order_by("-timestamp")
+        return query
+
+    async def export_records(self, *args, **kwargs):
+        """兼容内部旧调用；HTTP 导出使用 stream_export_records。"""
+        return await self.export_query(*args, **kwargs).order_by("-timestamp", "-id")
+
+    async def stream_export_records(self, query, *, ceiling, batch_size=500):
+        """固定开始时最大 ID；以(timestamp,id)游标保持旧倒序和同时间稳定性。"""
+        from tortoise.expressions import Q
+
+        cursor = None
+        query = query.filter(id__lte=ceiling)
+        while True:
+            page = query
+            if cursor:
+                timestamp, identifier = cursor
+                page = page.filter(Q(timestamp__lt=timestamp) | Q(timestamp=timestamp, id__lt=identifier))
+            rows = await page.order_by("-timestamp", "-id").limit(batch_size)
+            if not rows:
+                break
+            for record in rows:
+                yield record
+            cursor = (rows[-1].timestamp, rows[-1].id)
 
 
 emoji_controller = EmojiController()

@@ -36,6 +36,22 @@ import {
   EMOTIONS,
   recordUserLabel,
 } from '../src/utils/emoji.js'
+import { canControlAI, teacherIds } from '../src/utils/ai.js'
+
+test('D AI actions require live revisions/preflight and grants parse strictly', async () => {
+  const job = { id: 4, active: true, desired: 'ready', observed: 'prechecking', generation: 2 }
+  assert.equal(canControlAI(job, 'start'), false)
+  assert.equal(canControlAI({ ...job, observed: 'ready' }, 'start'), true)
+  assert.equal(canControlAI({ ...job, desired: 'stopped', observed: 'ready' }, 'start'), false)
+  assert.equal(canControlAI({ ...job, desired: 'running' }, 'pause'), true)
+  assert.equal(canControlAI({ ...job, active: false }, 'stop'), false)
+  assert.deepEqual(teacherIds('1, 3, 1'), [1, 3])
+  for (const invalid of ['1,-2', '1,', '1.0', '9007199254740992'])
+    assert.throws(() => teacherIds(invalid))
+  await api.controlAIJob(job, 'stop')
+  assert.equal(state.calls.at(-1).path, '/ai/jobs/4/actions')
+  assert.deepEqual(state.calls.at(-1).data, { action: 'stop', revision: 2 })
+})
 
 function setup(component) {
   return component.setup({}, { expose() {} })

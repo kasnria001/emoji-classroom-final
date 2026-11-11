@@ -4,6 +4,8 @@ import { NCard, NEmpty, NGrid, NGridItem, NProgress, NSelect, NSpace, NStatistic
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import api from '@/api'
+import AIJobPanel from '@/components/ai/AIJobPanel.vue'
+import { captureSession, isCurrentSession } from '@/utils/auth/session'
 
 defineOptions({ name: '实时看板' })
 
@@ -13,6 +15,7 @@ const dashboardData = ref(null)
 const loading = ref(false)
 const autoRefresh = ref(false)
 let timer = null
+let sequence = 0
 
 const EMOJI_MAP = {
   HAPPY: '😊',
@@ -36,6 +39,10 @@ async function loadSessions() {
 }
 
 async function loadDashboard() {
+  const ticket = ++sequence
+  const id = sessionId.value
+  const snapshot = captureSession()
+  const current = () => ticket === sequence && id === sessionId.value && isCurrentSession(snapshot)
   if (!sessionId.value) {
     dashboardData.value = null
     return
@@ -43,11 +50,11 @@ async function loadDashboard() {
   loading.value = true
   try {
     const res = await api.getRealtimeDashboard({ session_id: sessionId.value })
-    dashboardData.value = res.data
+    if (current()) dashboardData.value = res.data
   } catch (error) {
-    dashboardData.value = null
+    if (current()) dashboardData.value = null
   } finally {
-    loading.value = false
+    if (current()) loading.value = false
   }
 }
 
@@ -60,6 +67,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  sequence++
   if (timer) clearInterval(timer)
 })
 
@@ -92,6 +100,7 @@ function onAutoRefreshChange(value) {
     <NEmpty v-if="!dashboardData" description="请选择课堂查看实时看板" />
 
     <template v-else>
+      <AIJobPanel :key="sessionId" :session-id="sessionId" />
       <NGrid :cols="4" :x-gap="12" :y-gap="12">
         <NGridItem>
           <NCard size="small">

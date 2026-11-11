@@ -81,4 +81,15 @@ export default {
   // classroom - dashboard & statistics
   getRealtimeDashboard: (params = {}) => request.get('/dashboard/realtime', { params }),
   getStatistics: (params = {}) => request.get('/statistics', { params }),
+  // D controls reuse the existing user session; device secrets never enter this client.
+  getAIProfiles: () => request.get('/ai/model-profiles'),
+  getAIDevices: () => request.get('/ai/devices'),
+  createAIDevice: (data) => request.post('/ai/devices', data),
+  updateAIDevice: (id, data) => request.put(`/ai/devices/${id}`, data),
+  issueAICredential: (id) => request.post(`/ai/devices/${id}/credentials`, {}),
+  revokeAICredential: (id) => request.delete(`/ai/devices/${id}/credentials`),
+  getAIJobs: (sessionId) => request.get('/ai/jobs', { params: { session_id: sessionId } }),
+  createAIJob: (data) => request.post('/ai/jobs', data),
+  controlAIJob: (job, action) =>
+    request.post(`/ai/jobs/${job.id}/actions`, { action, revision: job.generation }),
 }

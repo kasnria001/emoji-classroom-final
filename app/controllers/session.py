@@ -50,9 +50,16 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
         return await self.create(obj_in)
 
     async def update_session(self, obj_in: ClassSessionUpdate, actor_id: int) -> ClassSession:
+        from app.services.ai_jobs import classroom_mutation
+
+        async with classroom_mutation(session_id=obj_in.id):
+            return await self._update_session(obj_in, actor_id)
+
+    async def _update_session(self, obj_in: ClassSessionUpdate, actor_id: int) -> ClassSession:
         session = await self.get_for_actor(obj_in.id, actor_id)
         values = obj_in.model_dump(exclude_unset=True, exclude={"id"})
         from app.services.ai_jobs import guard_session_mutation
+
         if any(key in values for key in ("course_id", "start_time", "end_time")):
             await guard_session_mutation([session.id])
         if "course_id" in values:
@@ -64,11 +71,18 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
         return await self.update(obj_in.id, values)
 
     async def delete_session(self, session_id: int, actor_id: int) -> None:
+        from app.services.ai_jobs import classroom_mutation
+
+        async with classroom_mutation(session_id=session_id):
+            await self._delete_session(session_id, actor_id)
+
+    async def _delete_session(self, session_id: int, actor_id: int) -> None:
         actor = await self._require_user(actor_id)
         if not actor.is_superuser:
             raise HTTPException(status_code=403, detail="Only administrators can delete classroom sessions")
         await self.get_for_actor(session_id, actor_id)
         from app.services.ai_jobs import guard_session_mutation
+
         await guard_session_mutation([session_id])
         await self.remove(session_id)
 

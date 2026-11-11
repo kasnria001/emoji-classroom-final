@@ -58,6 +58,8 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
         self.max_body_size = 1024 * 1024  # 1MB 响应体大小限制
 
     async def get_request_args(self, request: Request) -> dict:
+        if request.url.path.startswith("/api/v1/ai/"):
+            return {"metadata_only": True}
         args = {}
         # 获取查询参数
         for key, value in request.query_params.items():
@@ -148,7 +150,7 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
                 and request.method in route.methods
             ):
                 data["module"] = ",".join(route.tags)
-                data["summary"] = route.summary
+                data["summary"] = route.summary or route.name or ""
         # 获取用户信息
         try:
             token = request.headers.get("token")

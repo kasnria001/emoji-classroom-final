@@ -101,6 +101,57 @@ async def test_mysql_additive_migration_and_concurrent_effect(existing):
         assert sum(row["status"] == "accepted" for row in responses) == 1
         assert await AIReceipt.all().count() == 1
         assert await EmojiRecord.all().count() == 1 + int(existing)
+        from app.services.statistics import get_statistics, get_realtime_dashboard
+
+        aggregate = await get_statistics(teacher.id, False)
+        assert aggregate["overview"]["total_records"] == 1 + int(existing)
+        assert aggregate["by_day"] == [{"day": now.strftime("%Y-%m-%d"), "count": 1 + int(existing)}]
+        dashboard = await get_realtime_dashboard(teacher.id, False, session.id)
+        assert dashboard["ai_count"] == 1 and dashboard["student_count"] == int(existing)
+        from aerich import Command
+
+        command = Command(tortoise_config=config, location=str(root / "migrations"))
+        await command.init()
+        assert len(await command.upgrade()) == 3
+        assert await command.heads() == []
+        assert await EmojiRecord.all().count() == 1 + int(existing)
+        # 可选本机真实 mysqldump→新库 restore，不把文档命令当验收。
+        if os.environ.get("AI_TEST_MYSQL_BIN"):
+            from asyncmy.constants import CLIENT
+            binary = Path(os.environ["AI_TEST_MYSQL_BIN"]) / ("mysqldump.exe" if os.name == "nt" else "mysqldump")
+            env = os.environ.copy()
+            env["MYSQL_PWD"] = password
+            process = await asyncio.create_subprocess_exec(
+                str(binary), "--host=127.0.0.1", f"--port={port}", "--user=root",
+                "--single-transaction", "--no-tablespaces", "--skip-comments", database,
+                env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            dump, errors = await process.communicate()
+            assert process.returncode == 0, errors.decode(errors="replace").replace(password, "[redacted]")
+            restore_name = "ai_restore_" + uuid4().hex[:12]
+            async with raw.cursor() as cur:
+                await cur.execute(f"CREATE DATABASE `{restore_name}` CHARACTER SET utf8mb4")
+            restored = None
+            try:
+                restored = await asyncmy.connect(
+                    host="127.0.0.1", port=port, user="root", password=password,
+                    database=restore_name, autocommit=True, client_flag=CLIENT.MULTI_STATEMENTS,
+                )
+                async with restored.cursor() as cur:
+                    await cur.execute(dump.decode("utf-8"))
+                    while await cur.nextset():
+                        pass
+                    await cur.execute("SELECT count(*) FROM emoji_record")
+                    assert (await cur.fetchone())[0] == 1 + int(existing)
+                    await cur.execute("SELECT count(*) FROM ai_receipt")
+                    assert (await cur.fetchone())[0] == 1
+                    await cur.execute("SELECT count(*) FROM aerich")
+                    assert (await cur.fetchone())[0] == 3
+            finally:
+                if restored:
+                    await restored.ensure_closed()
+                async with raw.cursor() as cur:
+                    await cur.execute(f"DROP DATABASE `{restore_name}`")
     finally:
         await Tortoise.close_connections()
         async with raw.cursor() as cur:

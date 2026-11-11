@@ -4,6 +4,7 @@ import hashlib
 import secrets
 from datetime import timedelta
 from uuid import uuid4
+from contextlib import asynccontextmanager
 
 from fastapi import HTTPException
 from tortoise.exceptions import IntegrityError
@@ -20,6 +21,21 @@ PROFILES = {
     "standard": "deepface-emotion-0.0.104-onnx",
 }
 LEASE_SECONDS = 45
+
+
+@asynccontextmanager
+async def classroom_mutation(session_id=None, course_id=None):
+    """课程→课堂锁顺序与 create_job 相同，覆盖 guard 与实际修改之间的竞态。"""
+    async with in_transaction() as db:
+        if session_id is not None:
+            session = await ClassSession.filter(id=session_id).using_db(db).first()
+            if not session:
+                raise HTTPException(404, "Class session not found")
+            course_id = session.course_id
+        await Course.filter(id=course_id).using_db(db).select_for_update().first()
+        if session_id is not None:
+            await ClassSession.filter(id=session_id).using_db(db).select_for_update().first()
+        yield db
 
 
 async def is_admin(user):
@@ -206,6 +222,11 @@ async def create_job(user, payload: JobCreate):
     await require_teacher(user)
     try:
         async with in_transaction() as db:
+            initial = await ClassSession.filter(id=payload.session_id).using_db(db).first()
+            if not initial:
+                raise HTTPException(404, "Class session not found")
+            await Course.filter(id=initial.course_id).using_db(db).select_for_update().first()
+            await ClassSession.filter(id=payload.session_id).using_db(db).select_for_update().first()
             session = await session_for(user, payload.session_id, db)
             if naive(session.end_time) <= wall(utc_now()):
                 raise HTTPException(422, "Classroom has already ended")

@@ -43,7 +43,7 @@ class AIBoundaryMiddleware:
         try:
             if not isinstance(json.loads(body), dict):
                 raise ValueError()
-        except (ValueError, UnicodeError):
+        except (ValueError, UnicodeError, RecursionError):
             return await error(422, "Invalid JSON metadata")
         delivered = False
 
