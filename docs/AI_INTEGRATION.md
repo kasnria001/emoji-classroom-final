@@ -2,7 +2,11 @@
 
 日期：2026-11-11。本文是正式设计交付物，不是私人实施计划。
 
-**当前状态：P2/P3 后端完成，worker/UI/发布继续开发。** 已实现设备凭证/授权、课堂任务、租约/fencing、事务 receipt/metadata 入库、严格 JSON 边界和安全 audit。SQLite 105 项通过，MySQL 8.4.10 新/旧库及并发入库两项实测通过。下列控制/数据 API 已注册；真实 worker、UI 控制和发布尚未验收，不能据后端测试宣称 D 全部完成。
+**当前状态：D 软件首版闭环已实现。** 设备/授权/课堂任务、租约/fencing、事务 receipt/metadata、
+真实视频 Worker、持久 outbox、原 Vue 页面集成、SQL 聚合与有界 CSV 均已落地。
+真实文件→独立模型进程→HTTP→数据库→原看板/CSV，以及 Chromium 管理员/教师/学生流程已验证。
+详细测试和未完成的现场验收见 `AI_TEST_REPORT.md`，操作/部署见 `AI_OPERATIONS.md`。
+USB/RTSP、Linux Compose、课堂准确率、两小时 soak 未计为已验收，不据 smoke 宣称生产现场全通过。
 
 ## 1. 实验要求核对
 
@@ -12,19 +16,19 @@
 
 | ID | 实验必做/交付 | 设计与实现位置 | 验收方式 | 当前证据 |
 | --- | --- | --- | --- | --- |
-| D01 | 摄像头流帧采样 | 独立 `ai-service` capture/pipeline | USB 实测、模拟视频帧 E2E、EOF/断线/释放 | 待实现，单图片模型验证不等同采集完成 |
-| D02 | 人脸检测和表情分类 | emotion-only standard/edge adapter | 真实模型、无脸/多人/小脸/低光、固定预处理和输出 | P1 适配/验证中 |
+| D01 | 摄像头流帧采样 | `emoji_ai.capture/worker` | 实际 file VideoCapture、首帧/EOF/释放、USB/RTSP现场 | 文件视频闭环通过；硬件待验收 |
+| D02 | 人脸检测和表情分类 | emotion-only standard/edge adapter | 固定预处理/七类分数、真实模型与blank | 两套 CPU 实测；课堂质量待验收 |
 | D03 | 至少五类 Emoji 映射 | `emoji_ai.mapping`，复用现有五类枚举 | 五类、别名、unsupported、invalid output 单测 | P1 实现 |
-| D04 | 采样频率/置信度可配 | 批准 profile + job 配置快照，节点调度 | 阈值边界、节流、后端再校验 | 分数边界实现；job/采样待实现 |
-| D05 | AI/confidence/session/timestamp 入库 | 由设备/job 推导 source/session，显式 captured_at | 同一 `EmojiRecord`、采样时间而非重试时间 | 事件/时间边界和旧表回归实现；新入口待实现 |
-| D06 | 默认匿名、不保存人脸图片/视频 | `user_id=None`，strict 元数据协议，节点仅内存帧 | DB/outbox/log/image-context 隐私测试 | schema 拒绝 raw，Git/Docker 排除；端到端待实现 |
-| D07 | 断线重试和错误日志 | 有界 SQLite JSON outbox、publisher、safe telemetry | 断网/ACK 丢失/重启/空间满/TTL 故障演练 | 待实现 |
-| D08 | 独立服务令牌，不混用学生 JWT | 独立设备 credential，仅哈希保存、范围/revoke | 普通 JWT 不能写 AI，device/job 交集授权 | 普通 JWT 旁路已封堵；设备认证待实现 |
-| D09 | 独立 REST 服务、统一错误/OpenAPI | 同一 FastAPI 控制与数据面，worker 不直连 DB | OpenAPI、bounded body、safe errors、权限测试 | schema 完成；路由未注册 |
-| D10 | 教师历史/看板、管理统计/CSV | 原 `EmojiRecord`、原 API/Vue 页面 | 匿名 AI 同源可见，不算学生人数，旧 CSV 列/北京时间 | P1 兼容测试实现；新 worker/UI 待集成 |
-| D11 | 分层、迁移、关系数据库 | API → controller → service → ORM repository | SQLite/MySQL 新/旧库、事务并发、权限初始化 | 新 AI 实体/迁移待实现 |
-| D12 | 单元/API/模拟帧→DB/E2E/权限 | 后端、独立服务、前端测试集 | fake 测试与真实模型/硬件验收分开记 | P1 单元与旧 API 回归，完整链路待实现 |
-| D13 | 局限性、API/部署/用户/测试文档、贡献 | 本文、模型评估报告、后续操作/发布手册 | 可复现部署、真实 Git 提交、现场演示 | 正式设计已落地；完整报告待发布 |
+| D04 | 采样频率/置信度可配 | profile + job 不变配置快照 | 边界、节点调度、后端复核 | 已实现与测试 |
+| D05 | AI/confidence/session/timestamp 入库 | credential/job 推导，显式 captured_at | 同一 EmojiRecord、真实采样时间 | HTTP闭环与兼容测试通过 |
+| D06 | 匿名、不保存人脸图片/视频 | null user、严格元数据、帧仅内存 | DB/outbox/log/一次性 secret | 已实现与测试 |
+| D07 | 重试与错误日志 | WAL outbox + publisher + safe events | ACK不确定/重启/TTL/quota/fencing | 自动化故障测试通过；现场断网长测待验收 |
+| D08 | 独立服务令牌 | hash-only credential、分配/轮换/revoke | JWT分离、跨教师/设备越权 | 已测试 |
+| D09 | REST/统一错误/OpenAPI | FastAPI 控制/数据面、worker不直连DB | 严格 body、chunked限量、安全audit | 已注册并测试 |
+| D10 | 原历史/看板/统计/CSV | 原页面嵌AIJobPanel、同一表 | null不计学生、UTC→北京、SQL聚合 | 自动化/真实HTTP/Chromium通过 |
+| D11 | 分层与迁移 | controller/service/ORM、additive migration2 | SQLite/MySQL新旧库、并发、Aerich | 已测试；旧手写schema须字段diff |
+| D12 | 单元/API/帧→DB/E2E/权限 | backend + ai-service + web/tests | fake/真实模型/硬件分开计 | 软件自动化矩阵通过 |
+| D13 | API/部署/用户/测试/贡献文档 | 本文/AI_OPERATIONS/AI_TEST_REPORT/模型报告 | 正式Git提交、可复现命令、未验收矩阵 | 已落地，Linux部署需目标环境验收 |
 
 产品增强：设备管理、课堂任务、租约/fencing、幂等回执、持久 outbox、监控是首版可靠性设计，但不是指导书原文新增的评分项。Compose/CI/MQ/MCP 是选做；不先堆平台，不用这些扩展替代真实视频→数据库闭环。
 

@@ -20,10 +20,16 @@ log = logging.getLogger("emoji_ai")
 
 def event_from_observation(job, observation, captured_at):
     return {
-        "contract_version": 1, "event_id": str(uuid4()), "job_id": job["id"],
-        "generation": job["generation"], "lease_id": job["lease_id"], "captured_at": captured_at,
-        "emoji_type": observation.decision.emoji_type, "confidence": observation.decision.confidence,
-        "model_version": job["model_version"], "config_revision": job["config_revision"],
+        "contract_version": 1,
+        "event_id": str(uuid4()),
+        "job_id": job["id"],
+        "generation": job["generation"],
+        "lease_id": job["lease_id"],
+        "captured_at": captured_at,
+        "emoji_type": observation.decision.emoji_type,
+        "confidence": observation.decision.confidence,
+        "model_version": job["model_version"],
+        "config_revision": job["config_revision"],
         "mapping_version": job["mapping_version"],
         "quality": {"detection_confidence": observation.detection_confidence},
     }
@@ -53,19 +59,26 @@ class Worker:
         self.ack_key = None
         self.first_frame = None
         self.preflight_deadline = 0
+        self.failed_key = None
 
     def _adapter(self, job):
         factory = DeepFaceAdapter if job["profile"] == "standard" else LightweightAdapter
         return factory(
-            manifest=Path(self.config["manifest"]), model_dir=Path(self.config["model_dir"]),
-            threshold=job["threshold"], detection_threshold=job["detection_threshold"],
+            manifest=Path(self.config["manifest"]),
+            model_dir=Path(self.config["model_dir"]),
+            threshold=job["threshold"],
+            detection_threshold=job["detection_threshold"],
         )
 
     def prepare_profiles(self):
         # 一个进程显式选一个 profile，避免 DeepFace 全局缓存跨配置/线程变化。
         profile = self.config.get("profile", "edge")
         try:
-            adapter = self._adapter({"profile": profile, "threshold": .7, "detection_threshold": .85})
+            adapter = self._adapter({"profile": profile, "threshold": 0.7, "detection_threshold": 0.85})
+            # 实际预热推理，不仅解析权重；空帧不会生成业务观测。
+            import numpy as np
+
+            adapter.analyze(np.zeros((480, 640, 3), dtype=np.uint8))
             del adapter
             self.profiles = [profile]
             self.health = "ready"
@@ -89,12 +102,20 @@ class Worker:
         if key == self.ack_key and now < self.next_status:
             return
         stats = self.outbox.stats()
-        self.api.ack(self.job["id"], {
-            "incarnation": self.incarnation, "generation": self.job["generation"],
-            "lease_id": self.job.get("lease_id"), "observed": state, "health": health,
-            "metrics": {**self.metrics, "queue_size": stats["queue_size"], "dropped": stats["dropped"]},
-        })
+        self.api.ack(
+            self.job["id"],
+            {
+                "incarnation": self.incarnation,
+                "generation": self.job["generation"],
+                "lease_id": self.job.get("lease_id"),
+                "observed": state,
+                "health": health,
+                "metrics": {**self.metrics, "queue_size": stats["queue_size"], "dropped": stats["dropped"]},
+            },
+        )
         self.ack_key, self.next_status = key, now + 5
+        if state == "failed":
+            self.failed_key = (self.job["id"], self.job["generation"])
 
     def tick(self):
         try:
@@ -118,7 +139,9 @@ class Worker:
         if now >= self.next_heartbeat:
             self.next_heartbeat = now + 5
             try:
-                response = self.api.heartbeat({"incarnation": self.incarnation, "profiles": self.profiles, "health": self.health})
+                response = self.api.heartbeat(
+                    {"incarnation": self.incarnation, "profiles": self.profiles, "health": self.health}
+                )
                 now = time.monotonic()  # 网络等待不能延长服务端授予的租约。
                 server = datetime.fromisoformat(response["server_time"].replace("Z", "+00:00"))
                 if abs((datetime.now(timezone.utc) - server).total_seconds()) > 30:
@@ -150,8 +173,12 @@ class Worker:
                 self.health = "waiting"
                 if not self.disconnected:
                     self._ack(job["desired"], "waiting")
-            elif job["desired"] in ("ready", "running"):
-                if not self.capture and now >= self.next_reconnect and (job["desired"] != "running" or now < self.lease_deadline):
+            elif job["desired"] in ("ready", "running") and self.failed_key != (job["id"], job["generation"]):
+                if (
+                    not self.capture
+                    and now >= self.next_reconnect
+                    and (job["desired"] != "running" or now < self.lease_deadline)
+                ):
                     try:
                         if job["profile"] not in self.profiles:
                             raise RuntimeError("Profile not prepared")
@@ -182,7 +209,13 @@ class Worker:
                         if not self.disconnected:
                             self._ack("failed", "no_frame")
                 now = time.monotonic()
-                if self.capture and self.prepared and job["desired"] == "running" and now < self.lease_deadline and now >= self.next_sample:
+                if (
+                    self.capture
+                    and self.prepared
+                    and job["desired"] == "running"
+                    and now < self.lease_deadline
+                    and now >= self.next_sample
+                ):
                     self.next_sample = now + job["sample_interval"]
                     frame = self.first_frame
                     self.first_frame = None
@@ -202,7 +235,9 @@ class Worker:
                             self.next_publish = now + 1
                             self.metrics["published"] += self.publisher.flush()
                         return
-                    captured_at = getattr(self.capture, "captured_at", None) or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                    captured_at = getattr(self.capture, "captured_at", None) or datetime.now(
+                        timezone.utc
+                    ).isoformat().replace("+00:00", "Z")
                     if time.monotonic() >= self.lease_deadline:
                         del frame
                         self._release()
@@ -220,7 +255,7 @@ class Worker:
                             self.health = "no_face"
                         else:
                             self.health = "ready"
-                        for observation in observations[:job["max_faces"]]:
+                        for observation in observations[: job["max_faces"]]:
                             if observation.decision and observation.decision.emoji_type:
                                 self.outbox.enqueue(event_from_observation(job, observation, captured_at))
                             else:
@@ -240,6 +275,8 @@ class Worker:
             self.next_publish = now + 1
             self.metrics["published"] += self.publisher.flush()
         if self.job and not self.disconnected and now >= self.next_status and self.capture:
+            if self.outbox.stats()["queue_size"] and self.publisher.last_unavailable:
+                self.health = "buffering"
             self._ack(self.job["desired"], self.health)
 
     def run(self, duration=None):
@@ -248,7 +285,7 @@ class Worker:
         try:
             while not self.stop and (duration is None or time.monotonic() - started < duration):
                 self.tick()
-                time.sleep(.05)
+                time.sleep(0.05)
         except CredentialRejected:
             log.error("credential_rejected; capture_stopped")
         finally:

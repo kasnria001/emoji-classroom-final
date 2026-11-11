@@ -542,4 +542,28 @@ C 模块负责管理端：管理员/教师查看 Emoji 数据、多维统计、�
 
 菜单在应用启动时通过 `init_classroom_menus` 幂等补齐（新老数据库都会自动创建），无需手动插入。
 
+## AI 服务集成（D）
+
+独立教室采集节点 + 原课堂任务控制 + 同一业务库/看板/统计/CSV。
+支持固定 DeepFace emotion-only 标准 CPU profile 和 YuNet + MobileFaceNet 轻量 profile；
+不把两套模型塞入业务后端，不以 fake 替代缺失模型。
+
+- 管理员：「课堂情绪管理 / AI采集设备」，注册、分配教师、一次性签发/轮换/撤销凭证。
+- 教师：原课堂详情内「AI课堂采集」，创建预检、开始/暂停/停止；原实时看板亦可控制。
+- AI 记录默认匿名，仅上传元数据，不保存课堂图片/人脸裁剪；学生手动链路保持独立。
+- 单设备单任务、45秒租约、持久 outbox、事件幂等、严格请求限量、版本追溯。
+- 统计使用数据库聚合；CSV 流式 keyset，最多100000行，原列/BOM/注入防护保持。
+
+阅读顺序：
+
+1. `docs/AI_INTEGRATION.md`：实验要求对照、架构/协议、采集节点与学生端同机扩展。
+2. `ai-service/README.md`：独立安装、模型准备/doctor、Worker启动。
+3. `docs/AI_OPERATIONS.md`：用户操作、状态、部署/迁移、备份/恢复、容量。
+4. `docs/AI_MODEL_VALIDATION.md`、`docs/AI_TEST_REPORT.md`：真实证据与未验收边界。
+
+真实文件视频与 HTTP/数据库/原页面闭环已验；USB/RTSP、Linux Compose、课堂质量、
+两小时稳定性需目标环境现场验收，不以本机单图 smoke 代替。
+生产先单进程 `python scripts/migrate.py`，API副本 `AUTO_INIT_DB=false`；
+本地默认自动迁移仍保留。
+
 

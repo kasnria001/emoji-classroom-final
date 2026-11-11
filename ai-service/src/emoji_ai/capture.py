@@ -29,9 +29,16 @@ class Capture:
         if kind == "usb":
             capture = self.factory(int(value))
         else:
-            capture = self.factory(value, cv2.CAP_FFMPEG, [
-                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
-            ])
+            capture = self.factory(
+                value,
+                cv2.CAP_FFMPEG,
+                [
+                    cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+                    3000,
+                    cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+                    3000,
+                ],
+            )
         if not capture.isOpened():
             capture.release()
             raise RuntimeError("Capture input is unavailable")

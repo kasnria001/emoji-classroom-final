@@ -65,6 +65,7 @@ class APIClient:
 class Publisher:
     def __init__(self, api, outbox, random_source=random.random):
         self.api, self.outbox, self.random = api, outbox, random_source
+        self.last_unavailable = False
 
     def flush(self):
         rows = self.outbox.due()
@@ -75,6 +76,7 @@ class Publisher:
         except CredentialRejected:
             raise
         except BackendUnavailable:
+            self.last_unavailable = True
             for identifier, _, attempts in rows:
                 self.outbox.retry(identifier, min(60, 2 ** min(attempts, 6)) + self.random())
             return 0
@@ -88,13 +90,16 @@ class Publisher:
             for identifier, _, attempts in rows:
                 self.outbox.retry(identifier, min(60, 2 ** min(attempts, 6)) + self.random())
             return 0
+        self.last_unavailable = False
         published = 0
         for identifier, _, attempts in rows:
             result = results.get(identifier)
-            if result and result["status"] in ("accepted", "duplicate", "filtered"):
+            if result and result.get("status") in ("accepted", "duplicate", "filtered"):
                 self.outbox.ack(identifier)
                 published += result.get("decision") == "accepted"
-            elif result and result.get("code", 0) not in (429, 500, 502, 503, 504):
+            elif (
+                result and result.get("status") == "rejected" and result.get("code", 0) not in (429, 500, 502, 503, 504)
+            ):
                 self.outbox.ack(identifier, dropped=True)
             else:
                 self.outbox.retry(identifier, min(60, 2 ** min(attempts, 6)) + self.random())

@@ -48,6 +48,7 @@ def make_middlewares():
                 "/api/v1/base/update_password",
                 "/docs",
                 "/openapi.json",
+                "^/healthz$",
             ],
         ),
     ]
@@ -73,7 +74,7 @@ async def init_superuser():
             UserCreate(
                 username="admin",
                 email="admin@admin.com",
-                password="123456",
+                password=settings.BOOTSTRAP_ADMIN_PASSWORD,
                 is_active=True,
                 is_superuser=True,
             )
@@ -172,6 +173,7 @@ async def init_classroom_menus():
                 keepalive=False,
             )
 
+
 async def init_apis():
     apis = await api_controller.model.exists()
     if not apis:
@@ -179,23 +181,19 @@ async def init_apis():
     # 旧库只补齐 D 控制 API，不删除/重置他人自定义权限。
     from app import app
     from fastapi.routing import APIRoute
+
     for route in app.routes:
         if isinstance(route, APIRoute) and "AI控制" in route.tags:
             for method in route.methods:
-                await Api.get_or_create(method=method, path=route.path,
-                                        defaults={"summary": route.summary, "tags": "AI控制"})
+                await Api.get_or_create(
+                    method=method, path=route.path, defaults={"summary": route.summary, "tags": "AI控制"}
+                )
 
 
 async def init_db():
     command = Command(tortoise_config=settings.TORTOISE_ORM)
-    try:
-        await command.init_db(safe=True)
-    except FileExistsError:
-        pass
-
     await command.init()
-    # 只应用 migrations 目录中已有的迁移，不在启动时自动生成新迁移文件；
-    # 全新库会按迁移 0→1→… 依次建表，已有库只执行尚未应用的迁移。
+    # 永不生成迁移；唯一启动路径是仓库已提交的 0→1→… SQL。
     await command.upgrade(run_in_transaction=True)
 
 
@@ -259,9 +257,17 @@ async def init_data():
     await init_classroom_menus()
     parent = await Menu.get(path="/classroom", parent_id=0)
     for name, path in [("AI采集设备", "ai-devices"), ("AI课堂任务", "ai-jobs")]:
-        await Menu.get_or_create(parent_id=parent.id, path=path, defaults={
-            "name": name, "menu_type": MenuType.MENU, "component": f"/classroom/{path}",
-            "icon": "carbon:camera", "order": 6, "keepalive": False,
-        })
+        await Menu.get_or_create(
+            parent_id=parent.id,
+            path=path,
+            defaults={
+                "name": name,
+                "menu_type": MenuType.MENU,
+                "component": f"/classroom/{path}",
+                "icon": "carbon:camera",
+                "order": 6,
+                "keepalive": False,
+            },
+        )
     await init_apis()
     await init_roles()
