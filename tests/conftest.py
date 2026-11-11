@@ -8,8 +8,10 @@ from httpx import ASGITransport, AsyncClient
 from tortoise import Tortoise
 
 from app.api.v1.courses import courses_router
+from app.api.v1.dashboard import dashboard_router
 from app.api.v1.emoji import emoji_router
 from app.api.v1.sessions import sessions_router
+from app.api.v1.statistics import statistics_router
 from app.core.exceptions import (
     DoesNotExist,
     DoesNotExistHandle,
@@ -90,6 +92,8 @@ async def client(tmp_path):
     app.include_router(courses_router, prefix="/api/v1")
     app.include_router(sessions_router, prefix="/api/v1")
     app.include_router(emoji_router, prefix="/api/v1")
+    app.include_router(dashboard_router, prefix="/api/v1")
+    app.include_router(statistics_router, prefix="/api/v1")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
         test_client.teacher = teacher

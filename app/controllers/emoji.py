@@ -31,9 +31,12 @@ class EmojiController(CRUDBase[EmojiRecord, EmojiCreate, EmojiCreate]):
     async def create_record(self, obj_in: EmojiCreate, actor_id: int | None = None) -> EmojiRecord:
         """写入记录并校验来源约束与用户归属。
 
-        AI 服务可以不提供 user_id，但必须提供 session_id 和置信度；普通用户
-        只能为自己写入手动记录。
+        用户登录身份不能写入 AI 来源，包括教师和管理员。设备服务身份由独立
+        AI 入库服务处理；本控制器仍保留可信内部调用的来源字段校验。
         """
+
+        if actor_id is not None and obj_in.source is EmojiSource.AI:
+            raise HTTPException(status_code=403, detail="AI records require an independent device credential")
 
         values = obj_in.model_dump(exclude_unset=True)
         user_id = values.get("user_id", actor_id)

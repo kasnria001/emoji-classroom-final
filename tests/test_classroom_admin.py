@@ -24,7 +24,8 @@ from app.core.exceptions import (
     ResponseValidationError,
     ResponseValidationHandle,
 )
-from app.models import User
+from app.models import EmojiRecord, User
+from app.models.enums import EmojiSource, EmojiType
 from app.schemas.login import JWTPayload
 from app.services.export import build_csv, build_csv_bytes
 from app.utils.jwt_utils import create_access_token
@@ -128,10 +129,9 @@ async def _seed_classroom(client):
         json={"user_id": client.student.id, "session_id": session_id, "emoji_type": "HAPPY", "source": "MANUAL"},
         headers=headers,
     )
-    await client.post(
-        "/api/v1/emoji",
-        json={"session_id": session_id, "emoji_type": "SAD", "source": "AI", "confidence": 0.9},
-        headers=headers,
+    # 统计 fixture 直接准备业务记录，不借教师 JWT 冒充 AI 服务。
+    await EmojiRecord.create(
+        session_id=session_id, emoji_type=EmojiType.SAD, source=EmojiSource.AI, confidence=0.9
     )
     return session_id
 

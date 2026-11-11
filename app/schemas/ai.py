@@ -1,0 +1,85 @@
+"""AI worker v1 的元数据契约；用户身份、课堂和来源均由服务端任务推导。
+
+这组 schema 先锁定边界，设备认证/租约/事务完成后才注册正式入库路由。
+"""
+
+import re
+from datetime import datetime, timezone
+from typing import Annotated, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
+
+from app.models.enums import EmojiType
+
+_RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z")
+_UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
+
+
+def _uuid(value):
+    if isinstance(value, UUID):
+        parsed = value
+    elif isinstance(value, str) and _UUID.fullmatch(value):
+        parsed = UUID(value)
+    else:
+        raise ValueError("Use a canonical UUID v4")
+    if parsed.version != 4:
+        raise ValueError("Use a canonical UUID v4")
+    return parsed
+
+
+def _captured_at(value):
+    if isinstance(value, str) and _RFC3339.fullmatch(value):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if not isinstance(value, datetime) or value.utcoffset() is None:
+        raise ValueError("captured_at must be an RFC3339 datetime with a timezone offset")
+    return value.astimezone(timezone.utc)
+
+
+def _version(value):
+    if type(value) is not int:
+        raise ValueError("contract_version must be an integer")
+    return value
+
+
+PositiveId = Annotated[int, Field(strict=True, gt=0)]
+Score = Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
+Identifier = Annotated[str, Field(strict=True, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")]
+EventUUID = Annotated[UUID, BeforeValidator(_uuid)]
+CapturedAt = Annotated[datetime, BeforeValidator(_captured_at)]
+
+
+class AIMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class AIQuality(AIMetadata):
+    """仅允许非身份、非图像质量指标；缺失 detector score 不伪填 1。"""
+
+    detection_confidence: Score | None = None
+
+
+class AIIngestEvent(AIMetadata):
+    contract_version: Annotated[Literal[1], BeforeValidator(_version)] = 1
+    event_id: EventUUID
+    job_id: PositiveId
+    generation: PositiveId
+    lease_id: EventUUID
+    captured_at: CapturedAt
+    emoji_type: EmojiType
+    confidence: Score
+    model_version: Identifier
+    config_revision: PositiveId
+    mapping_version: Literal["five-emotions-v1"] = "five-emotions-v1"
+    quality: AIQuality = Field(default_factory=AIQuality)
+
+    @field_validator("emoji_type", mode="before")
+    @classmethod
+    def validate_emoji_type(cls, value):
+        if not isinstance(value, (str, EmojiType)):
+            raise ValueError("Use a supported EmojiType")
+        return value
+
+
+class AIResultBatch(AIMetadata):
+    events: Annotated[list[AIIngestEvent], Field(min_length=1, max_length=50)]

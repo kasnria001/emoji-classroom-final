@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emoji-classroom-ai"
+version = "0.1.0"
+description = "Independent anonymous classroom expression inference adapters and benchmarks"
+requires-python = ">=3.11,<3.13"
+dependencies = ["numpy==2.2.6", "opencv-contrib-python-headless==4.11.0.86"]
+
+[project.optional-dependencies]
+standard = ["deepface==0.0.104", "onnxruntime==1.31.1"]
+test = ["pytest==8.3.4"]
+
+[project.scripts]
+emoji-ai = "emoji_ai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["model_smoke: explicitly enabled offline real-model checks, not classroom accuracy/hardware acceptance"]
