@@ -64,3 +64,33 @@ py -3.11 -m venv ai-service/.venv
 - 当前 0.7/0.85 是验证参数，不是未经质量评估就批准的生产默认。
 
 实测证据、局限和未验收项见 `../docs/AI_MODEL_VALIDATION.md`。
+
+## 课堂 Worker
+
+一个设备代表一个采集 source；每个节点进程显式选择 `edge` 或 `standard`。
+管理员在原管理端注册设备，source alias 对应节点配置的 `sources` 键，
+分配教师并一次性签发凭证。教师在原课堂详情创建任务，等待实际首帧预检，
+再开始 / 暂停 / 停止；学生 JWT 不参与设备身份。
+
+从仓库根目录运行（将 example 复制到被忽略的 `.local/worker.json` 并修改输入）：
+
+```powershell
+$env:AI_DEVICE_TOKEN_FILE = 'D:\emoji-classroom-final\.local\device.secret'
+.\ai-service\.venv\Scripts\python.exe -m emoji_ai.worker --config .local/worker.json
+# 有界文件 smoke
+.\ai-service\.venv\Scripts\python.exe -m emoji_ai.worker --config .local/worker.json --duration 60
+```
+
+凭证不放命令参数、URL、源码或日志；节点配置和 RTSP URL 留在节点受限文件。
+远程后端必须 HTTPS，证书校验开启，不跟随重定向。
+USB / RTSP latest-frame 覆盖只保留内存最新帧；file 每采样一步读下一帧，
+用于有界演示而非实时重放原视频时间。文件 EOF 终止任务，health=`eof`，
+当前协议使用终止型 `failed` 状态，不自动循环采集。
+
+每次观测先入 SQLite WAL/FULL outbox，再向有界批次 API 发布。
+网络不确定时保留 event UUID 重试；只有 accepted/duplicate/filtered 回执才 ACK，
+永久拒绝计数并丢弃，401/403 退出采集。队列最多 5000 条、50MiB payload，
+TTL 15 分钟；主文件另有约 51MiB 页数硬上限，WAL 定期截断，不是整个目录精确 50MiB。
+控制心跳/确认最多常规每 5 秒，租约 45 秒；
+断网只在未到期租约内采样，到期释放输入，旧授权采样可按服务端窗口补交。
+不保存原帧、crop、landmark、embedding，也不把缺模型降级成假数据。
