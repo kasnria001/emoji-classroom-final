@@ -52,6 +52,9 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
     async def update_session(self, obj_in: ClassSessionUpdate, actor_id: int) -> ClassSession:
         session = await self.get_for_actor(obj_in.id, actor_id)
         values = obj_in.model_dump(exclude_unset=True, exclude={"id"})
+        from app.services.ai_jobs import guard_session_mutation
+        if any(key in values for key in ("course_id", "start_time", "end_time")):
+            await guard_session_mutation([session.id])
         if "course_id" in values:
             await course_controller.get_for_actor(values["course_id"], actor_id)
         start_time = values.get("start_time", session.start_time)
@@ -65,6 +68,8 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
         if not actor.is_superuser:
             raise HTTPException(status_code=403, detail="Only administrators can delete classroom sessions")
         await self.get_for_actor(session_id, actor_id)
+        from app.services.ai_jobs import guard_session_mutation
+        await guard_session_mutation([session_id])
         await self.remove(session_id)
 
     async def list_for_teacher(self, teacher_id: int, page: int = 1, page_size: int = 20, course_id: int | None = None):

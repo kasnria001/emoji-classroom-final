@@ -25,6 +25,7 @@ from app.schemas.menus import MenuType
 from app.settings.config import settings
 
 from .middlewares import BackGroundTaskMiddleware, HttpAuditLogMiddleware
+from .ai_boundary import AIBoundaryMiddleware
 
 
 def make_middlewares():
@@ -37,6 +38,7 @@ def make_middlewares():
             allow_headers=settings.CORS_ALLOW_HEADERS,
         ),
         Middleware(BackGroundTaskMiddleware),
+        Middleware(AIBoundaryMiddleware),
         Middleware(
             HttpAuditLogMiddleware,
             methods=["GET", "POST", "PUT", "DELETE"],
@@ -174,6 +176,14 @@ async def init_apis():
     apis = await api_controller.model.exists()
     if not apis:
         await api_controller.refresh_api()
+    # 旧库只补齐 D 控制 API，不删除/重置他人自定义权限。
+    from app import app
+    from fastapi.routing import APIRoute
+    for route in app.routes:
+        if isinstance(route, APIRoute) and "AI控制" in route.tags:
+            for method in route.methods:
+                await Api.get_or_create(method=method, path=route.path,
+                                        defaults={"summary": route.summary, "tags": "AI控制"})
 
 
 async def init_db():
@@ -228,10 +238,13 @@ async def init_roles():
 
     # 教师：基础模块 API + 实时课堂看板与多维统计菜单。
     await _add_missing_apis(teacher_role, basic_apis)
+    ai_teacher_apis = await Api.filter(tags="AI控制").exclude(path__contains="credentials")
+    ai_teacher_apis = [api for api in ai_teacher_apis if api.method == "GET" or "/jobs" in api.path]
+    await _add_missing_apis(teacher_role, ai_teacher_apis)
     classroom_menu = await Menu.get_or_none(path="/classroom", parent_id=0)
     if classroom_menu is not None:
         teacher_menus = [classroom_menu] + await Menu.filter(
-            parent_id=classroom_menu.id, path__in=["dashboard", "statistics"]
+            parent_id=classroom_menu.id, path__in=["dashboard", "statistics", "ai-jobs"]
         )
         await _add_missing_menus(teacher_role, teacher_menus)
 
@@ -244,5 +257,11 @@ async def init_data():
     await init_superuser()
     await init_menus()
     await init_classroom_menus()
+    parent = await Menu.get(path="/classroom", parent_id=0)
+    for name, path in [("AI采集设备", "ai-devices"), ("AI课堂任务", "ai-jobs")]:
+        await Menu.get_or_create(parent_id=parent.id, path=path, defaults={
+            "name": name, "menu_type": MenuType.MENU, "component": f"/classroom/{path}",
+            "icon": "carbon:camera", "order": 6, "keepalive": False,
+        })
     await init_apis()
     await init_roles()

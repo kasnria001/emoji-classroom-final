@@ -4,7 +4,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException, Request
 
 from app.core.ctx import CTX_USER_ID
-from app.models import Role, User
+from app.models import Course, Role, User
 from app.settings import settings
 
 
@@ -37,7 +37,16 @@ class PermissionControl:
         if current_user.is_superuser:
             return
         method = request.method
-        path = request.url.path
+        # 以匹配到的 APIRoute 模板授权，不能用字符串前缀放行任意资源。
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
+        # 与 B 的 legacy course owner 身份一致，仅开放 D 教师功能，数据归属仍由服务强制。
+        if (
+            "AI控制" in getattr(route, "tags", [])
+            and (method == "GET" or (method == "POST" and "/ai/jobs" in path))
+            and await Course.filter(teacher_id=current_user.id).exists()
+        ):
+            return
         roles: list[Role] = await current_user.roles
         if not roles:
             raise HTTPException(status_code=403, detail="The user is not bound to a role")

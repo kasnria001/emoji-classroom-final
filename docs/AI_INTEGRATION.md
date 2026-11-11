@@ -2,7 +2,7 @@
 
 日期：2026-11-11。本文是正式设计交付物，不是私人实施计划。
 
-**当前状态：P1 开发中。** 已实现事件 schema、采样时间适配、canonical hash、普通用户禁止写 AI 和兼容测试；独立模型适配/验证正在进行。设备认证、任务租约、可靠入库、采集 worker、UI 控制和部署尚未完成，下面的目标 API 不能当作已上线接口。
+**当前状态：P2/P3 后端完成，worker/UI/发布继续开发。** 已实现设备凭证/授权、课堂任务、租约/fencing、事务 receipt/metadata 入库、严格 JSON 边界和安全 audit。SQLite 105 项通过，MySQL 8.4.10 新/旧库及并发入库两项实测通过。下列控制/数据 API 已注册；真实 worker、UI 控制和发布尚未验收，不能据后端测试宣称 D 全部完成。
 
 ## 1. 实验要求核对
 
@@ -121,6 +121,10 @@
 - 读取完整 JSON 前限制 body bytes，audit/validation 错误不能回显素材或 secret；schema alone 不等于字节限制或安全日志已经完成。
 
 ## 6. 正式验收顺序
+
+后端阶段实施补充：一个 AIDevice 代表一个固定 source alias，用 unique active_slot 保证同时一个非终止任务；heartbeat 5 秒、租约 45 秒。控制先更新 desired/generation、关闭旧采集窗，停止/暂停前结果仍可按历史租约 15 分钟内补交；credential revoke/设备禁用关闭所有授权。停止节点 ACK 或租约安全过期后才释放设备。ADMIN 非 superuser、TEACHER、跨教师、用户 JWT/device token 分离和 chunked 超限已测试。
+
+MySQL 首次实测发现缺 `cryptography` 无法执行默认 caching_sha2_password 认证，已添加兼容现有 CFFI 的 45.0.7。迁移 0/1 保留原 SQLite SQL，仅补 MySQL 分支（此前 MySQL 自动迁移不可运行），新迁移 2 添加 AI 表；ORM-compatible MySQL bootstrap 与升级 SQL 正式提交。部署只单 migration 进程，备份后升级，不删除现有库。
 
 1. P1：兼容契约、元数据/时间/分数边界、真实模型可安装可推理证据。
 2. P2/P3：设备/任务/权限/租约，事务 receipt/metadata 入库与 MySQL 迁移。

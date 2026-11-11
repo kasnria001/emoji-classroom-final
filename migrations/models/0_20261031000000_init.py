@@ -3,6 +3,9 @@ from tortoise import BaseDBAsyncClient
 
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
+    if db and db.capabilities.dialect == "mysql":
+        from pathlib import Path
+        return (Path(__file__).resolve().parents[2] / "database" / "mysql_orm_bootstrap.sql").read_text(encoding="utf-8")
     return """
         CREATE TABLE IF NOT EXISTS "api" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

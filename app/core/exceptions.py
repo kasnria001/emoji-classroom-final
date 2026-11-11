@@ -33,7 +33,9 @@ async def HttpExcHandle(_: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(content=content, status_code=exc.status_code)
 
 
-async def RequestValidationHandle(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def RequestValidationHandle(req: Request, exc: RequestValidationError) -> JSONResponse:
+    if req.url.path.startswith("/api/v1/ai/"):
+        return JSONResponse({"code": 422, "msg": "Invalid AI metadata", "data": None}, status_code=422)
     content = dict(code=422, msg=f"RequestValidationError, {exc}")
     return JSONResponse(content=content, status_code=422)
 

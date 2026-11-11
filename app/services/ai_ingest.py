@@ -9,6 +9,13 @@ from datetime import datetime, timedelta
 
 from app.schemas.ai import AIIngestEvent
 from app.utils.time import BEIJING
+from app.core.ai_auth import naive, require_current, utc_now, wall
+from app.models.ai import AIDevice, AIJob, AILease, AIReceipt, AIRecordMetadata
+from app.models.classroom import ClassSession, EmojiRecord
+from app.models.enums import EmojiSource
+from fastapi import HTTPException
+from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 
 def canonical_event(event: AIIngestEvent) -> str:
@@ -62,3 +69,115 @@ def validate_capture_time(
     if event.captured_at < now - max_lateness:
         raise ValueError("Capture is outside the realtime retry window")
     return timestamp
+
+
+async def ingest_event(identity, event: AIIngestEvent):
+    """授权后事务 receipt + 业务记录 + metadata；重试保持原过滤决定。"""
+    now_utc = utc_now()
+    now = wall(now_utc)
+    try:
+        async with in_transaction() as db:
+            # 同设备 control/heartbeat/credential/ingest 共用行锁，避免撤销竞态。
+            await AIDevice.filter(id=identity.device_id).using_db(db).select_for_update().first()
+            credential, device = await require_current(identity, db)
+            job = await AIJob.filter(id=event.job_id, device_id=device.id).using_db(db).select_for_update().first()
+            if not job:
+                raise HTTPException(403, "Event is outside device job scope")
+            session = await ClassSession.filter(id=job.session_id).using_db(db).first()
+            lease = (
+                await AILease.filter(
+                    job_id=job.id,
+                    lease_id=event.lease_id,
+                    generation=event.generation,
+                    credential_id=credential.id,
+                )
+                .using_db(db)
+                .first()
+            )
+            if not lease or lease.revoked:
+                raise HTTPException(403, "Event lease is invalid or revoked")
+            captured = business_timestamp(event)
+            end = naive(lease.capture_end) if lease.capture_end else naive(lease.expires_at)
+            if not naive(lease.acquired_at) <= captured < end:
+                raise HTTPException(422, "Capture is outside the authorized lease window")
+            if (
+                event.model_version != job.model_version
+                or event.mapping_version != job.mapping_version
+                or event.config_revision != job.config_revision
+            ):
+                raise HTTPException(409, "Event does not match the approved model/config snapshot")
+            try:
+                validate_capture_time(
+                    event, session_start=naive(session.start_time), session_end=naive(session.end_time), now=now_utc
+                )
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            digest = event_payload_hash(event)
+            receipt = await AIReceipt.filter(event_id=event.event_id).using_db(db).first()
+            if receipt:
+                if receipt.payload_hash != digest or receipt.job_id != job.id:
+                    raise HTTPException(409, "Event ID has conflicting payload")
+                return {
+                    "event_id": str(event.event_id),
+                    "status": "duplicate",
+                    "decision": receipt.decision,
+                    "reason": receipt.reason,
+                    "record_id": receipt.record_id,
+                }
+            # DB 持久限速，跨 API 进程同设备 lock 生效；不依赖内存限流。
+            if (
+                await AIReceipt.filter(job__device_id=device.id, received_at__gte=now - timedelta(seconds=1))
+                .using_db(db)
+                .count()
+                >= 100
+            ):
+                raise HTTPException(429, "Device ingest rate exceeded")
+            reason = "accepted"
+            if event.confidence < job.threshold:
+                reason = "low_emotion_confidence"
+            detection = event.quality.detection_confidence
+            if detection is None or detection < job.detection_threshold:
+                reason = "low_detection_confidence"
+            decision = "accepted" if reason == "accepted" else "filtered"
+            record = None
+            if decision == "accepted":
+                record = await EmojiRecord.create(
+                    session_id=job.session_id,
+                    user_id=None,
+                    source=EmojiSource.AI,
+                    emoji_type=event.emoji_type,
+                    confidence=event.confidence,
+                    device_source=device.source_alias,
+                    timestamp=captured,
+                    using_db=db,
+                )
+                await AIRecordMetadata.create(
+                    record_id=record.id,
+                    job_id=job.id,
+                    lease_id=lease.id,
+                    model_version=job.model_version,
+                    mapping_version=job.mapping_version,
+                    config_revision=job.config_revision,
+                    quality=event.quality.model_dump(exclude_none=True),
+                    using_db=db,
+                )
+            await AIReceipt.create(
+                event_id=event.event_id,
+                job_id=job.id,
+                payload_hash=digest,
+                decision=decision,
+                reason=reason,
+                record_id=record.id if record else None,
+                received_at=now,
+                using_db=db,
+            )
+            return {
+                "event_id": str(event.event_id),
+                "status": decision,
+                "decision": decision,
+                "reason": reason,
+                "record_id": record.id if record else None,
+            }
+    except IntegrityError as exc:
+        # unique 是最终兜底；重试由原 event ID 再读取决定，不盲建第二条记录。
+        raise HTTPException(409, "Concurrent event conflict; retry the original event") from exc

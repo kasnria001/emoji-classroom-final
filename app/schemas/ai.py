@@ -83,3 +83,59 @@ class AIIngestEvent(AIMetadata):
 
 class AIResultBatch(AIMetadata):
     events: Annotated[list[AIIngestEvent], Field(min_length=1, max_length=50)]
+
+
+class DeviceCreate(AIMetadata):
+    name: Annotated[str, Field(strict=True, min_length=1, max_length=80)]
+    source_alias: Identifier
+    teacher_ids: Annotated[list[PositiveId], Field(max_length=100)] = Field(default_factory=list)
+
+
+class DeviceUpdate(AIMetadata):
+    enabled: bool = Field(strict=True)
+    teacher_ids: Annotated[list[PositiveId], Field(max_length=100)]
+
+
+class CredentialCreate(AIMetadata):
+    valid_days: Annotated[int, Field(strict=True, ge=1, le=365)] = 90
+
+
+class JobCreate(AIMetadata):
+    request_id: EventUUID
+    session_id: PositiveId
+    device_id: PositiveId
+    profile: Literal["standard", "edge"] = "edge"
+    threshold: Score = 0.7
+    detection_threshold: Annotated[float, Field(strict=True, gt=0, le=1, allow_inf_nan=False)] = 0.85
+    sample_interval: Annotated[float, Field(strict=True, ge=0.5, le=60, allow_inf_nan=False)] = 2.0
+    max_faces: Annotated[int, Field(strict=True, ge=1, le=30)] = 10
+
+
+class JobAction(AIMetadata):
+    action: Literal["start", "pause", "stop"]
+    revision: PositiveId
+
+
+class WorkerMetrics(AIMetadata):
+    sampled: Annotated[int, Field(strict=True, ge=0)] = 0
+    no_face: Annotated[int, Field(strict=True, ge=0)] = 0
+    filtered: Annotated[int, Field(strict=True, ge=0)] = 0
+    published: Annotated[int, Field(strict=True, ge=0)] = 0
+    queue_size: Annotated[int, Field(strict=True, ge=0, le=5000)] = 0
+    dropped: Annotated[int, Field(strict=True, ge=0)] = 0
+    inference_ms: Annotated[float, Field(strict=True, ge=0, le=3600000, allow_inf_nan=False)] = 0
+
+
+class WorkerHeartbeat(AIMetadata):
+    incarnation: EventUUID
+    profiles: Annotated[list[Literal["edge", "standard"]], Field(max_length=2)]
+    health: Literal["ready", "waiting", "no_frame", "no_face", "model_failed", "buffering", "degraded"] = "ready"
+
+
+class WorkerAck(AIMetadata):
+    incarnation: EventUUID
+    generation: PositiveId
+    lease_id: EventUUID | None = None
+    observed: Literal["ready", "running", "paused", "stopped", "failed"]
+    health: Literal["ready", "no_frame", "no_face", "model_failed", "buffering", "degraded", "eof", "waiting"] = "ready"
+    metrics: WorkerMetrics = Field(default_factory=WorkerMetrics)

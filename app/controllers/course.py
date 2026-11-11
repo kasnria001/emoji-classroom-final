@@ -66,6 +66,9 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
     async def update_course(self, obj_in: CourseUpdate, actor_id: int) -> Course:
         course = await self.get_for_actor(obj_in.id, actor_id)
         if obj_in.teacher_id is not None and obj_in.teacher_id != course.teacher_id:
+            from app.services.ai_jobs import guard_session_mutation
+            from app.models import ClassSession
+            await guard_session_mutation(await ClassSession.filter(course_id=course.id).values_list("id", flat=True))
             actor = await self._require_user(actor_id)
             if not actor.is_superuser:
                 raise HTTPException(status_code=403, detail="Only an administrator can transfer a course")
@@ -85,6 +88,9 @@ class CourseController(CRUDBase[Course, CourseCreate, CourseUpdate]):
         if not actor.is_superuser:
             raise HTTPException(status_code=403, detail="Only administrators can delete courses")
         await self.get_for_actor(course_id, actor_id)
+        from app.services.ai_jobs import guard_session_mutation
+        from app.models import ClassSession
+        await guard_session_mutation(await ClassSession.filter(course_id=course_id).values_list("id", flat=True))
         await self.remove(course_id)
 
 

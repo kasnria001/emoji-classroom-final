@@ -32,6 +32,9 @@ class SimpleBaseMiddleware:
         await self.after_request(request)
 
     async def before_request(self, request: Request):
+        if request.url.path.startswith("/api/v1/ai/"):
+            request.state.request_args = {"metadata_only": True}
+            return
         return self.app
 
     async def after_request(self, request: Request):
@@ -172,7 +175,10 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
             data["response_time"] = process_time
 
             data["request_args"] = request.state.request_args
-            data["response_body"] = await self.get_response_body(request, response)
+            if request.url.path.startswith("/api/v1/ai/") or request.url.path.endswith("/emoji/export"):
+                data["response_body"] = {"code": response.status_code, "msg": "Body omitted"}
+            else:
+                data["response_body"] = await self.get_response_body(request, response)
             await AuditLog.create(**data)
 
         return response
