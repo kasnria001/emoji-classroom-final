@@ -6,7 +6,6 @@ venv/
 .vscode
 .ruff_cache/
 .pytest_cache/
-migrations/
 .env
 
 # Local environment settings may contain passwords and tokens.
