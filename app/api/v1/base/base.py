@@ -99,6 +99,7 @@ async def get_userinfo():
     data["avatar"] = "https://avatars.githubusercontent.com/u/54677442?v=4"
     # Stable server-derived capabilities; legacy course/schedule ownership remains valid.
     names = await user_obj.roles.all().values_list("name", flat=True)
+    data["is_admin"] = user_obj.is_superuser or "ADMIN" in names
     codes = [code for code in ["STUDENT", "TEACHER"] if code in names]
     if await Course.filter(teacher_id=user_id).exists() and "TEACHER" not in codes:
         codes.append("TEACHER")

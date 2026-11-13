@@ -185,9 +185,12 @@ async def init_apis():
     for route in app.routes:
         if isinstance(route, APIRoute) and "AI控制" in route.tags:
             for method in route.methods:
-                await Api.get_or_create(
+                api, _ = await Api.get_or_create(
                     method=method, path=route.path, defaults={"summary": route.summary, "tags": "AI控制"}
                 )
+                if api.tags != "AI控制" or api.summary != route.summary:
+                    api.tags, api.summary = "AI控制", route.summary
+                    await api.save()
 
 
 async def init_db():
@@ -237,14 +240,22 @@ async def init_roles():
     # 教师：基础模块 API + 实时课堂看板与多维统计菜单。
     await _add_missing_apis(teacher_role, basic_apis)
     ai_teacher_apis = await Api.filter(tags="AI控制").exclude(path__contains="credentials")
-    ai_teacher_apis = [api for api in ai_teacher_apis if api.method == "GET" or "/jobs" in api.path]
+    ai_teacher_apis = [api for api in ai_teacher_apis if api.method == "GET"]
     await _add_missing_apis(teacher_role, ai_teacher_apis)
+    # 只撤销本模块旧模板的管理权限，保留非 AI 自定义授权。
+    old_ai_writes = await teacher_role.apis.filter(tags="AI控制").exclude(method="GET")
+    if old_ai_writes:
+        await teacher_role.apis.remove(*old_ai_writes)
     classroom_menu = await Menu.get_or_none(path="/classroom", parent_id=0)
     if classroom_menu is not None:
         teacher_menus = [classroom_menu] + await Menu.filter(
-            parent_id=classroom_menu.id, path__in=["dashboard", "statistics", "ai-jobs"]
+            parent_id=classroom_menu.id, path__in=["dashboard", "statistics"]
         )
         await _add_missing_menus(teacher_role, teacher_menus)
+        # 迁移旧教师授权：AI服务身份/课堂采集配置是管理员功能。
+        admin_ai_menus = await Menu.filter(parent_id=classroom_menu.id, path__in=["ai-devices", "ai-jobs"])
+        if admin_ai_menus:
+            await teacher_role.menus.remove(*admin_ai_menus)
 
     # 学生：仅基础模块 API；学生入口由前端按 role_codes 渲染，无需后端菜单。
     await _add_missing_apis(student_role, basic_apis)
@@ -256,8 +267,8 @@ async def init_data():
     await init_menus()
     await init_classroom_menus()
     parent = await Menu.get(path="/classroom", parent_id=0)
-    for name, path in [("AI采集设备", "ai-devices"), ("AI课堂任务", "ai-jobs")]:
-        await Menu.get_or_create(
+    for name, path in [("AI服务身份", "ai-devices"), ("课堂采集管理", "ai-jobs")]:
+        menu, _ = await Menu.get_or_create(
             parent_id=parent.id,
             path=path,
             defaults={
@@ -269,5 +280,8 @@ async def init_data():
                 "keepalive": False,
             },
         )
+        if menu.name != name:
+            menu.name = name
+            await menu.save()
     await init_apis()
     await init_roles()

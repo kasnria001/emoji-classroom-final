@@ -4,8 +4,10 @@ import { NCard, NEmpty, NGrid, NGridItem, NProgress, NSelect, NSpace, NStatistic
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import api from '@/api'
-import AIJobPanel from '@/components/ai/AIJobPanel.vue'
+import AIJobPanel from '@/components/ai/BrowserClassroomPanel.vue'
 import { captureSession, isCurrentSession } from '@/utils/auth/session'
+import { useUserStore } from '@/store'
+const userStore = useUserStore()
 
 defineOptions({ name: '实时看板' })
 
@@ -81,7 +83,7 @@ function onAutoRefreshChange(value) {
 </script>
 
 <template>
-  <CommonPage show-footer title="实时课堂情绪看板">
+  <CommonPage show-footer :title="userStore.isAdministrator ? '课堂管理 · 实时情绪看板' : '所授课堂 · 实时情绪看板'">
     <div mb-15 flex items-center gap-15>
       <NSelect
         v-model:value="sessionId"

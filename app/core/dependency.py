@@ -43,7 +43,7 @@ class PermissionControl:
         # 与 B 的 legacy course owner 身份一致，仅开放 D 教师功能，数据归属仍由服务强制。
         if (
             "AI控制" in getattr(route, "tags", [])
-            and (method == "GET" or (method == "POST" and "/ai/jobs" in path))
+            and method == "GET"
             and await Course.filter(teacher_id=current_user.id).exists()
         ):
             return

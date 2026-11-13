@@ -119,6 +119,7 @@ class JobAction(AIMetadata):
 class WorkerMetrics(AIMetadata):
     sampled: Annotated[int, Field(strict=True, ge=0)] = 0
     no_face: Annotated[int, Field(strict=True, ge=0)] = 0
+    multi_face: Annotated[int, Field(strict=True, ge=0)] = 0
     filtered: Annotated[int, Field(strict=True, ge=0)] = 0
     published: Annotated[int, Field(strict=True, ge=0)] = 0
     queue_size: Annotated[int, Field(strict=True, ge=0, le=5000)] = 0
@@ -139,3 +140,42 @@ class WorkerAck(AIMetadata):
     observed: Literal["ready", "running", "paused", "stopped", "failed"]
     health: Literal["ready", "no_frame", "no_face", "model_failed", "buffering", "degraded", "eof", "waiting"] = "ready"
     metrics: WorkerMetrics = Field(default_factory=WorkerMetrics)
+
+
+class BrowserPolicy(AIMetadata):
+    enabled: bool = Field(strict=True)
+    revision: Annotated[int, Field(strict=True, ge=0)]
+    sample_interval: Literal[5, 10, 15, 30] = 10
+    threshold: Score = 0.7
+
+    @field_validator("sample_interval", mode="before")
+    @classmethod
+    def strict_interval(cls, value):
+        if type(value) is not int:
+            raise ValueError("Use an integer sampling interval")
+        return value
+
+
+class BrowserOpen(AIMetadata):
+    consent: Literal[True]
+
+    @field_validator("consent", mode="before")
+    @classmethod
+    def explicit_consent(cls, value):
+        if value is not True:
+            raise ValueError("Explicit camera consent is required")
+        return value
+
+
+class BrowserClaim(AIMetadata):
+    capture_token: Annotated[str, Field(strict=True, min_length=70, max_length=100)]
+    event_id: EventUUID
+    payload_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+    incarnation: EventUUID
+
+
+class BrowserOutcome(AIMetadata):
+    event_id: EventUUID
+    reason: Literal["ready", "no_face", "multi_face", "filtered", "invalid_image", "model_failed"]
+    faces: Annotated[int, Field(strict=True, ge=0, le=5000)]
+    inference_ms: Annotated[float, Field(strict=True, ge=0, le=3600000, allow_inf_nan=False)] = 0.0

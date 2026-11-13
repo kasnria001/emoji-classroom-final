@@ -3,14 +3,12 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { NAlert, NButton, NCard, NInput, NModal, NSpace, NTag, NPopconfirm } from 'naive-ui'
 import CommonPage from '@/components/page/CommonPage.vue'
 import { captureSession, isCurrentSession } from '@/utils/auth/session'
-import { aiState, teacherIds } from '@/utils/ai'
+import { aiState } from '@/utils/ai'
 import api from '@/api'
-defineOptions({ name: 'AI设备' })
+defineOptions({ name: 'AI服务身份' })
 const devices = ref([])
-const grants = ref({})
 const name = ref('')
 const alias = ref('')
-const teachers = ref('')
 const loading = ref(false)
 const error = ref('')
 const secret = ref('')
@@ -37,7 +35,6 @@ async function operation(fn) {
     const response = await api.getAIDevices()
     if (!current()) return
     devices.value = response.data || []
-    grants.value = Object.fromEntries(devices.value.map((d) => [d.id, d.teacher_ids.join(',')]))
   } catch (err) {
     if (current()) error.value = err.message || '设备操作失败'
   } finally {
@@ -48,24 +45,23 @@ function create() {
   return operation(() => {
     if (!name.value.trim() || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(alias.value))
       throw new Error('设备名称必填，source alias 仅允许字母、数字、点、下划线、连字符')
-    return api.createAIDevice({ name: name.value.trim(), source_alias: alias.value, teacher_ids: teacherIds(teachers.value) })
+    return api.createAIDevice({ name: name.value.trim(), source_alias: alias.value, teacher_ids: [] })
   })
 }
 function save(device, enabled = device.enabled) {
-  return operation(() => api.updateAIDevice(device.id, { enabled, teacher_ids: teacherIds(grants.value[device.id]) }))
+  return operation(() => api.updateAIDevice(device.id, { enabled, teacher_ids: device.teacher_ids || [] }))
 }
 onMounted(() => operation())
 </script>
 <template>
-  <CommonPage title="AI 采集设备">
+  <CommonPage title="AI 服务身份">
     <NSpace vertical :size="16">
-      <NAlert type="info">管理员签发设备身份，教师只控制获准设备。source alias 对应节点本地输入，不在此填写含密码的摄像头 URL。</NAlert>
+      <NAlert type="info">此页仅供管理员注册服务器上的独立AI服务，不是公共摄像头入口。学生在自己的课堂网页开启摄像头，无需安装程序或领取永久凭证。接入步骤见 docs/AI_BROWSER_CAPTURE.md。</NAlert>
       <NAlert v-if="error" type="error">{{ error }}</NAlert>
-      <NCard title="注册设备" size="small">
+      <NCard title="注册服务身份" size="small">
         <NSpace>
-          <NInput v-model:value="name" placeholder="设备名称" :maxlength="80" :disabled="loading" />
-          <NInput v-model:value="alias" placeholder="source alias，例如 camera-1" :maxlength="64" :disabled="loading" />
-          <NInput v-model:value="teachers" placeholder="获准教师 ID，逗号分隔" :disabled="loading" />
+          <NInput v-model:value="name" placeholder="服务名称" :maxlength="80" :disabled="loading" />
+          <NInput v-model:value="alias" placeholder="来源别名，例如 student-browser" :maxlength="64" :disabled="loading" />
           <NButton type="primary" :loading="loading" @click="create">注册</NButton>
           <NButton :disabled="loading" @click="operation()">刷新</NButton>
         </NSpace>
@@ -77,11 +73,9 @@ onMounted(() => operation())
             <span>{{ aiState[device.health] || device.health }} · {{ device.profiles.join(', ') || '模型未准备' }} · {{ device.last_seen || '未连接' }}</span>
           </NSpace>
           <NSpace>
-            <NInput v-model:value="grants[device.id]" placeholder="获准教师 ID" :disabled="loading" style="width: 220px" />
-            <NButton :disabled="loading" @click="save(device)">保存授权</NButton>
             <NPopconfirm @positive-click="save(device, !device.enabled)">
               <template #trigger><NButton :disabled="loading">{{ device.enabled ? '禁用' : '启用' }}</NButton></template>
-              禁用或移除教师授权会终止活动任务，确认修改？
+              禁用服务会终止所有相关课堂的活动采集，确认修改？
             </NPopconfirm>
             <NPopconfirm @positive-click="operation(() => api.issueAICredential(device.id))">
               <template #trigger><NButton type="primary" :disabled="loading || !device.enabled">签发 / 轮换凭证</NButton></template>
@@ -96,7 +90,7 @@ onMounted(() => operation())
       </NCard>
     </NSpace>
     <NModal v-model:show="secretVisible" preset="card" title="一次性设备凭证" style="width: min(640px, 95vw)" @update:show="secret = ''">
-      <NAlert type="info">仅此一次显示。保存到节点受限 secret 文件；关闭后无法再次读取，丢失请轮换。</NAlert>
+      <NAlert type="info">仅此一次显示。保存到服务器受限 secret 文件；不要发给学生。关闭后无法再次读取，丢失请轮换。</NAlert>
       <pre style="white-space: pre-wrap; overflow-wrap: anywhere" data-testid="device-secret">{{ secret }}</pre>
       <NButton @click="secretVisible = false; secret = ''">已保存，关闭并清除</NButton>
     </NModal>

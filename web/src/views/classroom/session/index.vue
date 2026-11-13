@@ -22,7 +22,7 @@ import { useUserStore } from '@/store'
 import { formatDate, formatDateTime, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
-import AIJobPanel from '@/components/ai/AIJobPanel.vue'
+import AIJobPanel from '@/components/ai/BrowserClassroomPanel.vue'
 
 defineOptions({ name: '课堂会话' })
 
@@ -117,7 +117,7 @@ const columns = [
           },
           { default: () => '排课', icon: renderIcon('carbon:calendar', { size: 16 }) }
         ),
-        userStore.isSuperUser
+        userStore.isAdministrator
           ? h(
               NPopconfirm,
               { onPositiveClick: () => handleDelete({ session_id: row.id }) },

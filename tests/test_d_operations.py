@@ -57,7 +57,7 @@ async def test_aerich_fresh_upgrade_and_online_backup_restore(tmp_path, existing
         with sqlite3.connect(tmp_path / "snapshot.sqlite3") as restored:
             assert restored.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
             assert restored.execute("SELECT id FROM emoji_record").fetchone()[0] == record.id
-            assert restored.execute("SELECT count(*) FROM aerich").fetchone()[0] == 3
+            assert restored.execute("SELECT count(*) FROM aerich").fetchone()[0] == 4
         with pytest.raises(ValueError):
             backup(path, tmp_path / "snapshot.sqlite3")
     finally:

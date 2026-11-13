@@ -12,6 +12,7 @@ import {
   canAccessBusinessRoute,
   getSafeRedirect,
   filterBusinessMenus,
+  isAdministrator,
 } from '../src/utils/auth/business.js'
 import { validEmail, samePassword, clearLegacyPassword } from '../src/utils/auth/forms.js'
 import { studentRegistrationContract } from '../src/api/auth-contract.js'
@@ -175,6 +176,28 @@ test('single and dual role defaults and switching use only returned codes', () =
     canAccessBusinessRoute({ path: '/teacher/classroom' }, { role_codes: ['STUDENT'] }),
     false
   )
+})
+
+test('administrators use global workbench even with legacy teacher/student ownership', () => {
+  for (const identity of [{ is_admin: true }, { is_superuser: true }]) {
+    const data = { id: 1, role_codes: ['STUDENT', 'TEACHER'], ...identity }
+    assert.equal(isAdministrator(data), true)
+    assert.deepEqual(getBusinessRoles(data), [])
+    assert.equal(getDefaultPath(data, 'TEACHER'), '/classroom/dashboard')
+    assert.equal(canAccessBusinessRoute({ path: '/teacher/classroom' }, data), false)
+    assert.equal(canAccessBusinessRoute({ path: '/student/classroom' }, data), false)
+    assert.deepEqual(filterBusinessMenus([
+      { path: '/teacher/classroom', name: '我的课堂' },
+      { path: '/student/classroom', name: '学生反馈' },
+      { path: '/classroom', name: '课堂管理', children: [{ path: 'dashboard', name: '实时看板' }] },
+    ], data).map((item) => item.path), ['/classroom'])
+    const store = useUserStore()
+    store.setUserInfo(data)
+    assert.equal(store.isAdministrator, true)
+    assert.equal(store.switchBusinessRole('TEACHER'), false)
+    assert.equal(store.defaultPath, '/classroom/dashboard')
+  }
+  assert.equal(isAdministrator({ roles: [{ name: 'ADMIN' }], role_codes: ['ADMIN'], is_admin: 'true' }), false)
 })
 
 test('userinfo errors propagate instead of returning an Error as successful user data', async () => {

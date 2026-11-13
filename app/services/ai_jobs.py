@@ -44,14 +44,14 @@ async def is_admin(user):
 
 async def require_admin(user):
     if not await is_admin(user):
-        raise HTTPException(403, "Only administrators can manage devices")
+        raise HTTPException(403, "Only administrators can manage AI services and classroom capture")
 
 
 async def require_teacher(user):
     if not await is_admin(user) and not (
         await user.roles.filter(name="TEACHER").exists() or await Course.filter(teacher_id=user.id).exists()
     ):
-        raise HTTPException(403, "Only teachers and administrators can control AI")
+        raise HTTPException(403, "Only teachers and administrators can view classroom AI")
 
 
 async def session_for(user, session_id, db=None):
@@ -102,6 +102,7 @@ async def job_view(job):
         "session_id": job.session_id,
         "device_id": job.device_id,
         "profile": job.profile,
+        "input_kind": job.input_kind,
         "model_version": job.model_version,
         "mapping_version": job.mapping_version,
         "threshold": job.threshold,
@@ -155,6 +156,9 @@ async def cancel_device(device_id, db, now):
         job.active_slot, job.stopped_at = None, now
         job.generation += 1
         await job.save(using_db=db)
+        if job.input_kind == "browser":
+            from app.services.browser_capture import stop_job_captures
+            await stop_job_captures(job.id, db)
 
 
 async def update_device(user, device_id, payload: DeviceUpdate):
@@ -219,7 +223,7 @@ async def _reap(job, db, now):
 
 
 async def create_job(user, payload: JobCreate):
-    await require_teacher(user)
+    await require_admin(user)
     try:
         async with in_transaction() as db:
             initial = await ClassSession.filter(id=payload.session_id).using_db(db).first()
@@ -228,6 +232,10 @@ async def create_job(user, payload: JobCreate):
             await Course.filter(id=initial.course_id).using_db(db).select_for_update().first()
             await ClassSession.filter(id=payload.session_id).using_db(db).select_for_update().first()
             session = await session_for(user, payload.session_id, db)
+            if await AIJob.filter(
+                session_id=payload.session_id, input_kind="browser", active_slot__not_isnull=True
+            ).using_db(db).exists():
+                raise HTTPException(409, "Student browser capture already owns this classroom")
             if naive(session.end_time) <= wall(utc_now()):
                 raise HTTPException(422, "Classroom has already ended")
             device = await AIDevice.filter(id=payload.device_id).using_db(db).select_for_update().first()
@@ -276,11 +284,13 @@ async def list_jobs(user, session_id=None):
 
 
 async def control_job(user, job_id, payload):
-    await require_teacher(user)
+    await require_admin(user)
     initial = await job_for(user, job_id)
     async with in_transaction() as db:
         device = await AIDevice.filter(id=initial.device_id).using_db(db).select_for_update().first()
         job = await AIJob.filter(id=job_id).using_db(db).select_for_update().first()
+        if job.input_kind == "browser":
+            raise HTTPException(409, "Use classroom browser capture configuration")
         session = await session_for(user, job.session_id, db)
         if job.generation != payload.revision:
             raise HTTPException(409, "Stale job revision; refresh status")
@@ -344,6 +354,9 @@ async def heartbeat(identity, payload):
                 job.generation += 1
                 job.desired, job.stopped_at = "stopped", now
                 await job.save(using_db=db)
+                if job.input_kind == "browser":
+                    from app.services.browser_capture import stop_job_captures
+                    await stop_job_captures(job.id, db)
             lease = None
             if job.desired == "running":
                 lease = (
@@ -379,6 +392,8 @@ async def heartbeat(identity, payload):
                 lease_expires_at=wire(lease.expires_at) if lease else None,
             )
             results.append(view)
+    from app.services.browser_capture import cleanup
+    await cleanup()
     return {"server_time": wire(now), "jobs": results, "heartbeat_seconds": 5, "lease_seconds": LEASE_SECONDS}
 
 
@@ -390,6 +405,8 @@ async def acknowledge(identity, job_id, payload):
         job = await AIJob.filter(id=job_id, device_id=device.id).using_db(db).select_for_update().first()
         if not job:
             raise HTTPException(404, "Device job not found")
+        if job.input_kind == "browser":
+            raise HTTPException(409, "Browser metrics are maintained by frame receipts, not legacy acknowledgements")
         if device.incarnation != payload.incarnation or job.generation != payload.generation:
             raise HTTPException(409, "Worker generation/incarnation is stale")
         if payload.observed != "failed" and payload.observed != job.desired:

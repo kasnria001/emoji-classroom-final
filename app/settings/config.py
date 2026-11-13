@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     BOOTSTRAP_ADMIN_PASSWORD_FILE: str | None = None
     SECRET_KEY_FILE: str | None = None
     MYSQL_PASSWORD_FILE: str | None = None
+    # 独立浏览器推理服务身份，由管理员部署一次，学生不会获得其设备凭证。
+    AI_BROWSER_DEVICE_ID: int | None = None
+    AI_BROWSER_UPLOAD_URL: str = "/ai-stream/frames"
 
     PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     BASE_DIR: str = os.path.abspath(os.path.join(PROJECT_ROOT, os.pardir))

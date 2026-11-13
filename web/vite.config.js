@@ -30,6 +30,11 @@ export default defineConfig(({ command, mode }) => {
       open: true,
       proxy: VITE_USE_PROXY
         ? {
+            '/ai-stream': {
+              target: 'http://127.0.0.1:9998',
+              changeOrigin: false,
+              rewrite: (path) => path.replace(/^\/ai-stream/, ''),
+            },
             [VITE_BASE_API]: PROXY_CONFIG[VITE_BASE_API],
           }
         : undefined,

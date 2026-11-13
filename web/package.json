@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:auth": "node tests/run-auth-tests.mjs",
+    "test:camera": "node --test tests/browser-camera.test.mjs",
     "lint": "eslint --ext .js,.vue .",
     "lint:fix": "eslint --fix --ext .js,.vue .",
     "lint:staged": "lint-staged",

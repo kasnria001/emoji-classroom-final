@@ -80,6 +80,10 @@ async def ingest_event(identity, event: AIIngestEvent):
             job = await AIJob.filter(id=event.job_id, device_id=device.id).using_db(db).select_for_update().first()
             if not job:
                 raise HTTPException(403, "Event is outside device job scope")
+            browser_frame = None
+            if job.input_kind == "browser":
+                from app.services.browser_capture import validate_event
+                browser_frame = await validate_event(job, event, db)
             session = await ClassSession.filter(id=job.session_id).using_db(db).first()
             lease = (
                 await AILease.filter(
@@ -168,6 +172,14 @@ async def ingest_event(identity, event: AIIngestEvent):
                 received_at=now,
                 using_db=db,
             )
+            if browser_frame:
+                browser_frame.state, browser_frame.reason = "accepted", decision
+                await browser_frame.save(using_db=db)
+                metrics = dict(job.metrics)
+                key = "published" if decision == "accepted" else "filtered"
+                metrics[key] = metrics.get(key, 0) + 1
+                job.metrics = metrics
+                await job.save(using_db=db)
             return {
                 "event_id": str(event.event_id),
                 "status": decision,

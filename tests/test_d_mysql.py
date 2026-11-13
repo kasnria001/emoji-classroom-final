@@ -66,6 +66,10 @@ async def test_mysql_additive_migration_and_concurrent_effect(existing):
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
         await db.execute_script(await migration.upgrade(db))
+        from aerich import Command
+        command = Command(tortoise_config=config, location=str(root / "migrations"))
+        await command.init()
+        assert len(await command.upgrade()) == 4
         assert await EmojiRecord.all().count() == int(existing)
         device = await ai_jobs.create_device(
             user, DeviceCreate(name="mysql-camera", source_alias="camera", teacher_ids=[teacher.id])
@@ -75,12 +79,12 @@ async def test_mysql_additive_migration_and_concurrent_effect(existing):
         incarnation = uuid4()
         await ai_jobs.heartbeat(identity, WorkerHeartbeat(incarnation=incarnation, profiles=["edge"]))
         job = await ai_jobs.create_job(
-            teacher, JobCreate(request_id=uuid4(), session_id=session.id, device_id=device["id"])
+            user, JobCreate(request_id=uuid4(), session_id=session.id, device_id=device["id"])
         )
         await ai_jobs.acknowledge(
             identity, job["id"], WorkerAck(incarnation=incarnation, generation=job["generation"], observed="ready")
         )
-        await ai_jobs.control_job(teacher, job["id"], JobAction(action="start", revision=job["generation"]))
+        await ai_jobs.control_job(user, job["id"], JobAction(action="start", revision=job["generation"]))
         beat = await ai_jobs.heartbeat(identity, WorkerHeartbeat(incarnation=incarnation, profiles=["edge"]))
         job = beat["jobs"][0]
         event = AIIngestEvent.model_validate(
@@ -112,7 +116,7 @@ async def test_mysql_additive_migration_and_concurrent_effect(existing):
 
         command = Command(tortoise_config=config, location=str(root / "migrations"))
         await command.init()
-        assert len(await command.upgrade()) == 3
+        assert await command.upgrade() == []
         assert await command.heads() == []
         assert await EmojiRecord.all().count() == 1 + int(existing)
         # 可选本机真实 mysqldump→新库 restore，不把文档命令当验收。
@@ -146,7 +150,7 @@ async def test_mysql_additive_migration_and_concurrent_effect(existing):
                     await cur.execute("SELECT count(*) FROM ai_receipt")
                     assert (await cur.fetchone())[0] == 1
                     await cur.execute("SELECT count(*) FROM aerich")
-                    assert (await cur.fetchone())[0] == 3
+                    assert (await cur.fetchone())[0] == 4
             finally:
                 if restored:
                     await restored.ensure_closed()

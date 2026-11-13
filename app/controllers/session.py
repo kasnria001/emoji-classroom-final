@@ -12,6 +12,7 @@ from app.schemas.classroom import (
     ClassSessionUpdate,
     ScheduleUserCreate,
 )
+from app.services.ai_jobs import is_admin
 
 from .course import course_controller
 
@@ -41,7 +42,7 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
         if session is None:
             raise HTTPException(status_code=404, detail="Class session not found")
         actor = await self._require_user(actor_id)
-        if not actor.is_superuser and session.course.teacher_id != actor_id:
+        if not await is_admin(actor) and session.course.teacher_id != actor_id:
             raise HTTPException(status_code=403, detail="Class session does not belong to the teacher")
         return session
 
@@ -78,7 +79,7 @@ class SessionController(CRUDBase[ClassSession, ClassSessionCreate, ClassSessionU
 
     async def _delete_session(self, session_id: int, actor_id: int) -> None:
         actor = await self._require_user(actor_id)
-        if not actor.is_superuser:
+        if not await is_admin(actor):
             raise HTTPException(status_code=403, detail="Only administrators can delete classroom sessions")
         await self.get_for_actor(session_id, actor_id)
         from app.services.ai_jobs import guard_session_mutation

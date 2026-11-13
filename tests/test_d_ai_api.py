@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.ai import ai_router, ai_worker_router
+from app.api.v1.ai.browser import router as browser_router
 from app.api.v1.emoji import emoji_router
 from app.api.v1.dashboard import dashboard_router
 from app.core.ai_auth import naive, utc_now, wall, wire
@@ -44,6 +45,7 @@ async def ai_client(client):
     app.add_middleware(AIBoundaryMiddleware)
     app.include_router(ai_router, prefix="/api/v1")
     app.include_router(ai_worker_router, prefix="/api/v1")
+    app.include_router(browser_router, prefix="/api/v1")
     app.include_router(emoji_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -73,7 +75,7 @@ async def setup_job(c):
     )
     assert beat.status_code == 200, beat.text
     payload = {"request_id": str(uuid4()), "session_id": c.session.id, "device_id": c.device["id"], "profile": "edge"}
-    job = await c.post("/api/v1/ai/jobs", headers=c.teacher_headers, json=payload)
+    job = await c.post("/api/v1/ai/jobs", headers=c.admin_headers, json=payload)
     assert job.status_code == 200, job.text
     c.job = job.json()["data"]
     ready = await c.post(
@@ -84,7 +86,7 @@ async def setup_job(c):
     assert ready.status_code == 200, ready.text
     start = await c.post(
         f"/api/v1/ai/jobs/{c.job['id']}/actions",
-        headers=c.teacher_headers,
+        headers=c.admin_headers,
         json={"action": "start", "revision": c.job["generation"]},
     )
     assert start.status_code == 200, start.text
@@ -173,6 +175,12 @@ async def test_roles_dynamic_permissions_and_device_jwt_separation(ai_client):
     assert stored.secret_hash != c.credential["token"] and len(stored.secret_hash) == 64
     listing = await c.get("/api/v1/ai/devices", headers=c.admin_headers)
     assert "token" not in listing.text and "secret_hash" not in listing.text
+    for headers in [c.teacher_headers, c.student_headers]:
+        assert (await c.post("/api/v1/ai/jobs", headers=headers, json={
+            "request_id": str(uuid4()), "session_id": c.session.id, "device_id": c.device["id"],
+        })).status_code == 403
+        assert (await c.post(f"/api/v1/ai/jobs/{c.job['id']}/actions", headers=headers,
+                             json={"action": "stop", "revision": c.job["generation"]})).status_code == 403
 
 
 async def test_pause_stop_late_capture_fencing_revoke_and_active_slot(ai_client):
@@ -181,7 +189,7 @@ async def test_pause_stop_late_capture_fencing_revoke_and_active_slot(ai_client)
     old = event(c)
     pause = await c.post(
         f"/api/v1/ai/jobs/{c.job['id']}/actions",
-        headers=c.teacher_headers,
+        headers=c.admin_headers,
         json={"action": "pause", "revision": c.job["generation"]},
     )
     assert pause.status_code == 200
@@ -201,7 +209,7 @@ async def test_pause_stop_late_capture_fencing_revoke_and_active_slot(ai_client)
     after_pause = event(c)
     assert (await c.post("/api/v1/ai/emoji-results", headers=c.device_headers, json=after_pause)).status_code == 422
     duplicate_create = await c.post(
-        "/api/v1/ai/jobs", headers=c.teacher_headers, json={**payload, "request_id": str(uuid4())}
+        "/api/v1/ai/jobs", headers=c.admin_headers, json={**payload, "request_id": str(uuid4())}
     )
     assert duplicate_create.status_code == 409
     revoked = await c.delete(f"/api/v1/ai/devices/{c.device['id']}/credentials", headers=c.admin_headers)
@@ -254,6 +262,8 @@ async def test_incremental_api_initialization_retains_custom_grants(ai_client):
     role = await Role.get(name="TEACHER")
     custom = await Api.create(path="/custom", method="GET", summary="custom", tags="custom")
     await role.apis.add(custom)
+    old_write = await Api.get(path="/api/v1/ai/jobs", method="POST")
+    await role.apis.add(old_write)
     await init_apis()
     await init_roles()
     count = await Api.filter(tags="AI控制").count()
@@ -261,13 +271,14 @@ async def test_incremental_api_initialization_retains_custom_grants(ai_client):
     assert await Api.filter(tags="AI控制").count() == count
     assert await role.apis.filter(id=custom.id).exists()
     assert not await role.apis.filter(path__contains="credentials").exists()
+    assert not await role.apis.filter(id=old_write.id).exists()
     assert not await Api.filter(tags="AI设备服务").exists()
 
 
 async def test_ai_additive_sqlite_migration_preserves_existing_records(tmp_path):
     root = Path(__file__).resolve().parents[1]
     with sqlite3.connect(tmp_path / "upgrade.sqlite3") as db:
-        for path in sorted((root / "migrations/models").glob("[012]_*.py")):
+        for path in sorted((root / "migrations/models").glob("[0123]_*.py")):
             spec = importlib.util.spec_from_file_location("migration", path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)

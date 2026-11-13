@@ -57,7 +57,7 @@ async def test_real_file_worker_to_http_dashboard_csv(ai_client, tmp_path):
     ).json()["data"]
     created = await c.post(
         "/api/v1/ai/jobs",
-        headers=c.teacher_headers,
+        headers=c.admin_headers,
         json={
             "request_id": str(uuid4()),
             "session_id": c.session.id,
@@ -129,7 +129,7 @@ async def test_real_file_worker_to_http_dashboard_csv(ai_client, tmp_path):
         await wait_for(ready)
         start = await c.post(
             f"/api/v1/ai/jobs/{job['id']}/actions",
-            headers=c.teacher_headers,
+            headers=c.admin_headers,
             json={"action": "start", "revision": job["generation"]},
         )
         assert start.status_code == 200, start.text
@@ -137,7 +137,7 @@ async def test_real_file_worker_to_http_dashboard_csv(ai_client, tmp_path):
         current = await AIJob.get(id=job["id"])
         stop = await c.post(
             f"/api/v1/ai/jobs/{job['id']}/actions",
-            headers=c.teacher_headers,
+            headers=c.admin_headers,
             json={"action": "stop", "revision": current.generation},
         )
         assert stop.status_code == 200

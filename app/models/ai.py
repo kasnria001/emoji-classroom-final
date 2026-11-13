@@ -45,6 +45,7 @@ class AIJob(BaseModel, TimestampMixin):
     creator = fields.ForeignKeyField("models.User", related_name="ai_jobs", on_delete=fields.SET_NULL, null=True)
     request_id = fields.UUIDField(unique=True)
     profile = fields.CharField(max_length=16)
+    input_kind = fields.CharField(max_length=16, default="legacy")
     model_version = fields.CharField(max_length=64)
     mapping_version = fields.CharField(max_length=32, default="five-emotions-v1")
     threshold = fields.FloatField()
@@ -111,3 +112,56 @@ class AIRecordMetadata(BaseModel):
 
     class Meta:
         table = "ai_record_metadata"
+
+
+class BrowserBudget(BaseModel):
+    """课堂结束后清理的不可公开配额键；不关联结果或用户外键。"""
+
+    key = fields.CharField(max_length=64, unique=True)
+    expires_at = fields.DatetimeField()
+    sample_interval = fields.IntField(default=10)
+    last_slot = fields.BigIntField(default=-1)
+    last_claim_at = fields.DatetimeField(null=True)
+    phase_ms = fields.IntField()
+
+    class Meta:
+        table = "ai_browser_budget"
+
+
+class BrowserCapture(BaseModel):
+    """短期授权/防重复控制信息；不在结果接口中暴露，不是学生结果归属。"""
+
+    capture_id = fields.UUIDField(unique=True)
+    job = fields.ForeignKeyField("models.AIJob", related_name="browser_captures", on_delete=fields.CASCADE)
+    owner = fields.ForeignKeyField("models.User", null=True, on_delete=fields.SET_NULL)
+    active_key = fields.CharField(max_length=64, null=True, unique=True)
+    token_hash = fields.CharField(max_length=64)
+    expires_at = fields.DatetimeField()
+    created_at = fields.DatetimeField(auto_now_add=True)
+    stopped_at = fields.DatetimeField(null=True)
+    last_slot = fields.BigIntField(default=-1)
+    phase_ms = fields.IntField(default=0)
+
+    class Meta:
+        table = "ai_browser_capture"
+
+
+class BrowserFrame(BaseModel):
+    """仅短期元数据票据，不保存图片；防同一时间槽/请求重复推理和入库。"""
+
+    event_id = fields.UUIDField(unique=True)
+    capture = fields.ForeignKeyField("models.BrowserCapture", null=True, on_delete=fields.SET_NULL)
+    job = fields.ForeignKeyField("models.AIJob", on_delete=fields.CASCADE)
+    lease = fields.ForeignKeyField("models.AILease", on_delete=fields.CASCADE)
+    generation = fields.IntField()
+    slot = fields.BigIntField()
+    payload_hash = fields.CharField(max_length=64)
+    captured_at = fields.DatetimeField()
+    state = fields.CharField(max_length=16, default="claimed")
+    reason = fields.CharField(max_length=32, default="waiting")
+    counted = fields.BooleanField(default=False)
+    inference_ms = fields.FloatField(default=0)
+
+    class Meta:
+        table = "ai_browser_frame"
+        unique_together = (("capture", "slot"),)

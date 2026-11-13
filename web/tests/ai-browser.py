@@ -38,11 +38,13 @@ async def main():
             return context, page
 
         admin_context, page = await context_for("admin")
+        assert urlsplit(page.url).path == "/classroom/dashboard"
+        await expect(page.get_by_text("我的课堂", exact=True)).not_to_be_visible()
+        await expect(page.get_by_text("学生反馈", exact=True)).not_to_be_visible()
         await page.goto(config["web_url"] + "/classroom/ai-devices")
-        await expect(page.get_by_text("注册设备", exact=True)).to_be_visible()
-        await page.get_by_placeholder("设备名称", exact=True).fill("browser-device")
-        await page.get_by_placeholder("source alias，例如 camera-1", exact=True).fill("browser-camera")
-        await page.get_by_placeholder("获准教师 ID，逗号分隔", exact=True).fill(str(config["teacher_id"]))
+        await expect(page.get_by_text("注册服务身份", exact=True)).to_be_visible()
+        await page.get_by_placeholder("服务名称", exact=True).fill("browser-device")
+        await page.get_by_placeholder("来源别名，例如 student-browser", exact=True).fill("browser-camera")
         await page.get_by_role("button", name="注册", exact=True).click()
         await expect(page.get_by_text("browser-device", exact=False).first).to_be_visible()
         await page.get_by_role("button", name="签发 / 轮换凭证", exact=True).last.click()
@@ -55,19 +57,30 @@ async def main():
         await expect(page.get_by_test_id("device-secret")).not_to_be_visible()
         assert secret not in await page.locator("body").inner_text()
         del secret
-        await admin_context.close()
-
         teacher_context, page = await context_for("teacher")
+        await expect(page.get_by_text("AI服务身份", exact=True)).not_to_be_visible()
+        await expect(page.get_by_text("课堂采集管理", exact=True)).not_to_be_visible()
         await page.goto(config["web_url"] + f"/teacher/classroom/detail?session_id={config['session_id']}")
-        await expect(page.get_by_text("AI 课堂采集", exact=True)).to_be_visible()
-        await expect(page.get_by_role("button", name="暂停", exact=True)).to_be_enabled()
-        await page.get_by_role("button", name="暂停", exact=True).click()
-        await expect(page.get_by_text("期望：已暂停", exact=False)).to_be_visible()
-        await page.goto(config["web_url"] + "/classroom/ai-jobs")
-        await expect(page.get_by_text("AI 课堂采集", exact=True)).to_be_visible()
+        await expect(page.get_by_text("课堂匿名采集状态", exact=True).first).to_be_visible()
+        await expect(page.get_by_text("课堂采集中", exact=True)).to_be_visible()
+        for label in ["停止课堂采集", "开启课堂采集", "应用配置"]:
+            await expect(page.get_by_role("button", name=label, exact=True)).not_to_be_visible()
+        await expect(page.get_by_text("表情置信度阈值", exact=True)).not_to_be_visible()
+        # 同一课堂由管理员管理，教师仅看到状态更新。
+        admin_page = admin_context.pages[0]
+        await admin_page.goto(config["web_url"] + "/classroom/ai-jobs")
+        await expect(admin_page.get_by_text("全部课堂 · 采集管理", exact=True)).to_be_visible()
+        await admin_page.locator(".n-select").first.click()
+        await admin_page.get_by_text(f"#{config['session_id']} · 课程", exact=False).last.click()
+        await expect(admin_page.get_by_role("button", name="停止课堂采集", exact=True)).to_be_enabled()
+        await admin_page.get_by_role("button", name="停止课堂采集", exact=True).click()
+        await expect(admin_page.get_by_text("课堂采集未开启", exact=True)).to_be_visible()
+        await page.get_by_role("button", name="刷新状态", exact=True).click()
+        await expect(page.get_by_text("课堂采集未开启", exact=True)).to_be_visible()
         await page.goto(config["web_url"] + f"/teacher/classroom/detail?session_id={config['foreign_session_id']}")
-        await expect(page.get_by_text("AI 课堂采集", exact=True)).not_to_be_visible()
+        await expect(page.get_by_text("课堂匿名采集状态", exact=True)).not_to_be_visible()
         await teacher_context.close()
+        await admin_context.close()
 
         student_context, page = await context_for("student")
         calls = []
@@ -79,7 +92,9 @@ async def main():
         await student_context.close()
         assert not errors, errors
         await browser.close()
-        print("Chromium: admin register/once-secret/clear; teacher pause/own-scope; student route isolation passed.")
+        print(
+            "Chromium: admin global workbench/service identity/once-secret/stop; teacher readonly/own-scope; student route isolation passed."
+        )
 
 
 if __name__ == "__main__":
