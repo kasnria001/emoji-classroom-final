@@ -544,6 +544,12 @@ C 模块负责管理端：管理员/教师查看 Emoji 数据、多维统计、�
 
 ## AI 服务集成（D）
 
+**2026-11-13 产品方案更新：仅学生网页采集，AI结果强制匿名，不保留公共摄像头入口。**
+学生电脑只需普通摄像头和浏览器，Python/模型安装在独立服务器上。
+网页采集会话、帧入口及学生控件尚待交付；当前已验证的节点控制不能称为免安装网页采集。
+接入方案、操作边界、采样次数与防重复规则见 `docs/AI_BROWSER_CAPTURE.md`。
+下列节点能力是此前首版实现记录，不是新版学生操作路径。
+
 独立教室采集节点 + 原课堂任务控制 + 同一业务库/看板/统计/CSV。
 支持固定 DeepFace emotion-only 标准 CPU profile 和 YuNet + MobileFaceNet 轻量 profile；
 不把两套模型塞入业务后端，不以 fake 替代缺失模型。
@@ -556,13 +562,13 @@ C 模块负责管理端：管理员/教师查看 Emoji 数据、多维统计、�
 
 阅读顺序：
 
-1. `docs/AI_INTEGRATION.md`：实验要求对照、架构/协议、采集节点与学生端同机扩展。
-2. `ai-service/README.md`：独立安装、模型准备/doctor、Worker启动。
+1. `docs/AI_BROWSER_CAPTURE.md`：当前学生网页采集方案、匿名规则、采样预算与待实现状态。
+2. `docs/AI_INTEGRATION.md`、`ai-service/README.md`：已验证底座、实验对照、服务器模型准备。
 3. `docs/AI_OPERATIONS.md`：用户操作、状态、部署/迁移、备份/恢复、容量。
 4. `docs/AI_MODEL_VALIDATION.md`、`docs/AI_TEST_REPORT.md`：真实证据与未验收边界。
 
-真实文件视频与 HTTP/数据库/原页面闭环已验；USB/RTSP、Linux Compose、课堂质量、
-两小时稳定性需目标环境现场验收，不以本机单图 smoke 代替。
+真实文件视频与 HTTP/数据库/原页面闭环已验；2026-11-13本机USB旧节点首测通过。
+学生浏览器采集、Linux部署、课堂质量及两小时稳定性仍待验收，不以节点测试或单图 smoke 代替。
 生产先单进程 `python scripts/migrate.py`，API副本 `AUTO_INIT_DB=false`；
 本地默认自动迁移仍保留。
 

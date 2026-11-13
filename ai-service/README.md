@@ -1,8 +1,13 @@
-# 独立课堂 AI 服务：P1 模型适配与验证
+# 独立课堂 AI 服务
 
-**当前可运行的是模型准备、doctor、离线单图片 benchmark 和测试，不是完整课堂采集 worker。** USB/RTSP/file 视频、任务控制、设备认证、outbox/重试和真实 API 入库将在后续实现。设计及实验对照见 `../docs/AI_INTEGRATION.md`。
+模型准备、doctor、离线 benchmark、独立 Worker、设备认证、outbox和真实API入库已实现；
+文件视频闭环及本机USB短测通过。
 
-首版默认摄像头由独立课堂采集节点连接，学生端仍手动反馈；保留以后同机部署/获准本地桥接扩展，学生用户 JWT 与设备凭证不合并，AI 默认匿名。
+**2026-11-13方案更新：产品仅学生网页采集，AI结果强制匿名。**
+学生侧不安装本包，管理员在服务器安装模型环境；
+浏览器帧入口与采集会话尚待实现，不把现有Worker伪装成网页采集。
+新版接入/采样规范见 `../docs/AI_BROWSER_CAPTURE.md`。
+以下安装与模型检查用于独立AI主机；旧CLI Worker仅作回归工具，不再作为公共摄像头产品入口。
 
 ## 1. 验证环境与依赖隔离
 
@@ -39,7 +44,7 @@ py -3.11 -m venv ai-service/.venv
 .\ai-service\.venv\Scripts\python.exe -m emoji_ai.cli doctor --profile edge --manifest ai-service/models/manifest.json --model-dir ai-service/models
 ```
 
-离线启动前验证文件，缺失/哈希不符明确失败，不静默换模型或切到 fake。一个进程使用一个 profile/检测配置，DeepFace global engine/model cache 不宜跨任务修改。后续 worker 的并发/线程预算须实测。
+离线启动前验证文件，缺失/哈希不符明确失败，不静默换模型或切到 fake。一个进程使用一个 profile/检测配置，DeepFace global engine/model cache 不宜跨任务修改。浏览器多输入推理的并发/线程预算须独立实测。
 
 ## 3. Benchmark 与测试
 
@@ -65,7 +70,7 @@ py -3.11 -m venv ai-service/.venv
 
 实测证据、局限和未验收项见 `../docs/AI_MODEL_VALIDATION.md`。
 
-## 课堂 Worker
+## 旧 CLI Worker（回归工具，非学生接入方式）
 
 一个设备代表一个采集 source；每个节点进程显式选择 `edge` 或 `standard`。
 管理员在原管理端注册设备，source alias 对应节点配置的 `sources` 键，

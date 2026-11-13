@@ -60,7 +60,9 @@ publisher单测注入断网/ACK不确定；实际教室断网/阻塞USB未在本
 | --- | --- | --- |
 | Windows CPU edge/standard | 固定profile/hash/runtime | 真推理通过 |
 | file VideoCapture+Worker+HTTP | 已实现 | 真闭环通过 |
-| Windows USB/RTSP | 输入适配、latest-frame、timeout/重连实现 | 未有目标硬件/流，待现场 |
+| Windows USB（历史节点） | 已实现，非新版产品入口 | 2026-11-13本机短测通过，见下文 |
+| RTSP（历史节点） | 旧输入适配实现 | 未验收；新版不保留公共摄像头路线 |
+| 学生网页采集 | 2026-11-13确定新版接入规范 | 采集会话/帧入口/控件尚待实现，未计通过 |
 | Linux edge | downloaded wheel hash lock、Dockerfile | 无Linux/Docker运行，待验收 |
 | API/Web/MySQL Compose | 分服务、单migrate、secrets、health | 未构建/启动，不计通过 |
 | SQLite online backup/restore | 脚本与安全目标检查 | 真恢复通过 |
@@ -86,3 +88,30 @@ D：独立推理适配/准备/基准、capture/worker、凭证/任务/租约、�
 共享C：原管理端新增设备/任务与看板panel、聚合/导出优化，返回列/形状/北京口径保持。
 私有实施规划只在 `.local`，由 `.git/info/exclude` 排除；正式文档/源码/测试提交。
 Git身份 `kasnria001 <kasnria001@users.noreply.github.com>`，按阶段提交到feature分支，不改main。
+
+## 5. 2026-11-13本机USB首测（旧节点链路）
+
+使用这台Windows电脑的摄像头索引0，OpenCV实际后端DSHOW、分辨率640×480。
+先做8秒有界输入检查，获取155份最新帧样本后释放；没有保存照片/录像。
+
+随后通过原API注册专用设备、创建独立测试课堂，真实edge模型→服务认证HTTP→
+同一EmojiRecord→原看板，采样间隔2秒、表情阈值0.70、检测阈值0.85。
+2026-11-13 10:52:57至10:55:18（北京时间），67次推理采样：
+58条成功发布、9次过滤、0次无脸、待补交0、丢弃0。
+测试本机预览仅处理内存帧，设备凭证只存进程内存；结束后确认stopped、活动slot释放、
+摄像头释放，撤销测试设备凭证。本次使用业务库中的专门测试课堂，不混入原课堂。
+
+原计划测试最长15分钟，实际提前停止约2分21秒，**不计15分钟持续采集通过**。
+未专门完成离开镜头、多脸、断网、低光、全班并发或课堂准确率验收。
+结果中有通过阈值的分类不代表该分类经人工标注核验正确。
+
+本次证据说明普通电脑摄像头能走旧Python节点真实闭环，
+**不说明学生浏览器getUserMedia→独立AI服务的新路线已经实现**。
+用户随后确定新版只保留学生网页采集，强制匿名；接入与采样规范见`AI_BROWSER_CAPTURE.md`。
+
+本轮同时修复静态学生/教师子路由缺少显示标题，以及已缓存标签不更新的问题；
+内部`TeacherClassroomHome`保留作路由标识，不显示在中文菜单/页面标题/标签上。
+前端认证/业务测试56 passed、日期测试3 passed、Vite构建通过；空子路由不再重复显示面包屑。
+隔离Chromium通过`web/tests/navigation-labels.py`使用测试HTTP验证真实教师页面
+中文菜单/页面标题/旧标签更新，无重复标签；
+该浏览器检查不访问摄像头，不计为学生网页采集通过。

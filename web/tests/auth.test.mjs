@@ -37,6 +37,30 @@ import {
   recordUserLabel,
 } from '../src/utils/emoji.js'
 import { canControlAI, teacherIds } from '../src/utils/ai.js'
+import { routeBreadcrumbs, upsertRouteTag } from '../src/utils/tags.js'
+
+test('empty child routes do not repeat the same breadcrumb title', () => {
+  const matched = [
+    { path: '/teacher/classroom', meta: { title: '我的课堂' } },
+    { path: '/teacher/classroom', meta: { title: '我的课堂' } },
+    { path: '/teacher/classroom/detail', meta: { title: '课堂历史' } },
+    { path: '/untitled', meta: {} },
+  ]
+  assert.deepEqual(routeBreadcrumbs(matched), [matched[0], matched[2]])
+})
+
+test('route tabs refresh legacy internal labels without duplicates or input mutation', () => {
+  const old = [{ path: '/teacher/classroom', name: 'TeacherClassroomHome', title: 'TeacherClassroomHome' }]
+  const updated = upsertRouteTag(old, {
+    path: '/teacher/classroom', name: 'TeacherClassroomHome', title: '我的课堂',
+  })
+  assert.equal(updated.length, 1)
+  assert.equal(updated[0].title, '我的课堂')
+  assert.equal(updated[0].name, 'TeacherClassroomHome')
+  assert.equal(old[0].title, 'TeacherClassroomHome')
+  assert.equal(upsertRouteTag(updated, { path: '/teacher/classroom' })[0].title, '我的课堂')
+  assert.equal(upsertRouteTag(updated, { path: '/student/history', title: '个人历史' }).length, 2)
+})
 
 test('D AI actions require live revisions/preflight and grants parse strictly', async () => {
   const job = { id: 4, active: true, desired: 'ready', observed: 'prechecking', generation: 2 }
