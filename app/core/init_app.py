@@ -6,7 +6,7 @@ from tortoise.expressions import Q
 
 from app.api import api_router
 from app.controllers.api import api_controller
-from app.controllers.user import UserCreate, user_controller
+from app.controllers.user import user_controller
 from app.core.exceptions import (
     DoesNotExist,
     DoesNotExistHandle,
@@ -19,10 +19,10 @@ from app.core.exceptions import (
     ResponseValidationError,
     ResponseValidationHandle,
 )
-from app.log import logger
 from app.models.admin import Api, Menu, Role
 from app.schemas.menus import MenuType
 from app.settings.config import settings
+from app.utils.password import get_password_hash
 
 from .middlewares import BackGroundTaskMiddleware, HttpAuditLogMiddleware
 from .ai_boundary import AIBoundaryMiddleware
@@ -70,68 +70,50 @@ def register_routers(app: FastAPI, prefix: str = "/api"):
 async def init_superuser():
     user = await user_controller.model.exists()
     if not user:
-        await user_controller.create_user(
-            UserCreate(
-                username="admin",
-                email="admin@admin.com",
-                password=settings.BOOTSTRAP_ADMIN_PASSWORD,
-                is_active=True,
-                is_superuser=True,
-            )
+        await user_controller.model.create(
+            username="admin",
+            email="admin@admin.com",
+            password=get_password_hash(settings.BOOTSTRAP_ADMIN_PASSWORD),
+            is_active=True,
+            is_superuser=True,
         )
 
 
 async def init_menus():
-    menus = await Menu.exists()
-    if not menus:
-        parent_menu = await Menu.create(
-            menu_type=MenuType.CATALOG,
-            name="系统管理",
-            path="/system",
-            order=1,
-            parent_id=0,
-            icon="carbon:gui-management",
-            is_hidden=False,
-            component="Layout",
-            keepalive=False,
-            redirect="/system/user",
+    """补齐系统菜单；已有课堂或自定义菜单不能阻止核心菜单初始化。"""
+    parent_menu, _ = await Menu.get_or_create(
+        path="/system",
+        parent_id=0,
+        defaults={
+            "menu_type": MenuType.CATALOG,
+            "name": "系统管理",
+            "order": 1,
+            "icon": "carbon:gui-management",
+            "is_hidden": False,
+            "component": "Layout",
+            "keepalive": False,
+            "redirect": "/system/user",
+        },
+    )
+    children = [
+        ("用户管理", "user", "material-symbols:person-outline-rounded", 1),
+        ("角色管理", "role", "carbon:user-role", 2),
+        ("审计日志", "auditlog", "ph:clipboard-text-bold", 3),
+    ]
+    for name, path, icon, order in children:
+        await Menu.get_or_create(
+            path=path,
+            parent_id=parent_menu.id,
+            defaults={
+                "menu_type": MenuType.MENU,
+                "name": name,
+                "order": order,
+                "icon": icon,
+                "is_hidden": False,
+                "component": f"/system/{path}",
+                "keepalive": False,
+            },
         )
-        children_menu = [
-            Menu(
-                menu_type=MenuType.MENU,
-                name="用户管理",
-                path="user",
-                order=1,
-                parent_id=parent_menu.id,
-                icon="material-symbols:person-outline-rounded",
-                is_hidden=False,
-                component="/system/user",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="角色管理",
-                path="role",
-                order=2,
-                parent_id=parent_menu.id,
-                icon="carbon:user-role",
-                is_hidden=False,
-                component="/system/role",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="审计日志",
-                path="auditlog",
-                order=3,
-                parent_id=parent_menu.id,
-                icon="ph:clipboard-text-bold",
-                is_hidden=False,
-                component="/system/auditlog",
-                keepalive=False,
-            ),
-        ]
-        await Menu.bulk_create(children_menu)
 
 
 async def init_classroom_menus():

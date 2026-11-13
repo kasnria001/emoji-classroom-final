@@ -430,7 +430,7 @@ test('form validation failures restore loading and do not send requests', async 
   assert.equal(state.calls.length, 0)
 })
 
-test('password change only posts old/new password, retains current JWT and resets fields', async () => {
+test('password change only posts old/new password, logs out and resets fields', async () => {
   state.token = 'valid'
   const page = setup(Profile)
   formRef(page)
@@ -442,7 +442,7 @@ test('password change only posts old/new password, retains current JWT and reset
   await page.updatePassword()
   assert.equal(state.calls[0].path, '/base/update_password')
   assert.deepEqual(state.calls[0].data, { old_password: 'old', new_password: 'new' })
-  assert.equal(state.token, 'valid')
+  assert.equal(state.token, '')
   assert.equal(page.passwordForm.new_password, '')
   assert.equal(page.loading.value, false)
 })

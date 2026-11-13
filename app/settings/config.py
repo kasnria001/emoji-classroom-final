@@ -5,18 +5,19 @@ from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
 from pathlib import Path
+from app.utils.password import is_password_strong
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     VERSION: str = "0.1.0"
-    APP_TITLE: str = "Vue FastAPI Admin"
-    PROJECT_NAME: str = "Vue FastAPI Admin"
-    APP_DESCRIPTION: str = "Description"
+    APP_TITLE: str = "表情符号课堂情绪检查器"
+    PROJECT_NAME: str = "Emoji Classroom"
+    APP_DESCRIPTION: str = "学生手动反馈与匿名 AI 表情采集、课堂看板和管理统计服务"
 
-    CORS_ORIGINS: typing.List = ["*"]
-    CORS_ALLOW_CREDENTIALS: bool = True
+    CORS_ORIGINS: typing.List = ["http://localhost:3100", "http://127.0.0.1:3100"]
+    CORS_ALLOW_CREDENTIALS: bool = False
     CORS_ALLOW_METHODS: typing.List = ["*"]
     CORS_ALLOW_HEADERS: typing.List = ["*"]
 
@@ -59,9 +60,11 @@ class Settings(BaseSettings):
         if not self.DEBUG and (
             len(self.SECRET_KEY) < 32
             or self.SECRET_KEY == type(self).model_fields["SECRET_KEY"].default
-            or self.BOOTSTRAP_ADMIN_PASSWORD == "123456"
+            or not is_password_strong(self.BOOTSTRAP_ADMIN_PASSWORD)
         ):
             raise ValueError("Production requires a private SECRET_KEY and BOOTSTRAP_ADMIN_PASSWORD")
+        if not self.DEBUG and ("*" in self.CORS_ORIGINS or not self.CORS_ORIGINS):
+            raise ValueError("Production requires explicit CORS_ORIGINS")
         return self
 
     @property

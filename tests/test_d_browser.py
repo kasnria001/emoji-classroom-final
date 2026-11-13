@@ -10,7 +10,10 @@ import uvicorn
 
 from app.api.v1.base import base_router
 from app.api.v1.sessions import sessions_router
-from app.core.init_app import init_roles
+from app.api.v1.users import users_router
+from app.api.v1.roles import roles_router
+from app.core.dependency import DependPermission
+from app.core.init_app import init_roles, init_menus
 from app.core.ai_auth import utc_now, wall
 from app.models import ClassSession, Course, Menu
 from app.utils.password import get_password_hash
@@ -26,11 +29,13 @@ ai_client = fixture_ai_client
 async def test_browser_admin_teacher_student(ai_client, monkeypatch):
     c = ai_client
     await prepare(c, monkeypatch)
-    await c.post(f"/api/v1/ai/browser/captures/{c.capture['capture_id']}/stop",
-                 headers=c.student_headers, json={})
+    await c.post(f"/api/v1/ai/browser/captures/{c.capture['capture_id']}/stop", headers=c.student_headers, json={})
     app = c._transport.app
     app.include_router(base_router, prefix="/api/v1/base")
     app.include_router(sessions_router, prefix="/api/v1")
+    app.include_router(users_router, prefix="/api/v1/user", dependencies=[DependPermission])
+    app.include_router(roles_router, prefix="/api/v1/role", dependencies=[DependPermission])
+    await init_menus()
     parent = await Menu.get(path="/classroom", parent_id=0)
     for name, path in [("AI服务身份", "ai-devices"), ("课堂采集管理", "ai-jobs")]:
         await Menu.get_or_create(

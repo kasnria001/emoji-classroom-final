@@ -21,8 +21,8 @@ DeepFace、OpenCV、浏览器插件或本地采集程序。模型与依赖由管
 网页获取摄像头、服务器上的独立 Python 服务负责推理，仍符合上述分层要求。
 原学生 MANUAL 反馈、课堂排课、教师查询、管理端看板与 CSV 保留，不新建第二套门户或数据库。
 
-旧 USB/RTSP 节点不再作为正式用户操作路径；既有代码/测试只作为迁移过程的历史证据和回归工具。
-替换完成前须明确显示过渡状态，不能将节点控制页换个名称就当成网页采集功能。
+旧 USB/RTSP 节点不再作为正式用户操作路径；既有代码/测试仅历史证据与回归工具，
+未使用的旧节点UI已删除。实际自部署服务/模型/版本见 `AI_SERVICE.md`。
 
 ## 2. 谁采集、谁推理、结果保存什么
 
@@ -66,7 +66,8 @@ DeepFace、OpenCV、浏览器插件或本地采集程序。模型与依赖由管
 5. 保持单人入镜。无人脸、多人或低分时显示原因，不产生强行映射的记录。
 6. 点击「停止摄像头」释放摄像头；需要恢复时重新点击「开启摄像头」并重新获得授权。
 7. 点击「停止」、退出账号、切换账号/课堂、课堂结束或授权失效后释放全部摄像头 track，
-   中止在途上传，并撤销采集会话。管理员开启课堂不能代替学生同意摄像头权限。
+   中止在途上传，并撤销采集会话。改密/管理员重置密码也撤销原JWT与采集授权。
+   管理员开启课堂不能代替学生同意摄像头权限。
 
 拒绝摄像头权限、没有摄像头或不想参加自动采集时，原 MANUAL 反馈照常可用。
 不要求学生整节课持续授权，也不以未采集作为缺勤或评分依据。
@@ -226,6 +227,7 @@ MySQL使用对应备份方式再运行同一迁移入口。迁移3仅新增 `ai_
 4. 点击「签发/轮换凭证」，将一次性凭证保存到服务器受限文件
    `.local/browser-ai/service-token`，只保存凭证文本，不含引号。关闭弹窗后明文不可重读。
    不放Git、不放前端env、不放命令参数，不需要为每个学生发长期凭证。
+   签发/申请响应是真正HTTP `Cache-Control: no-store`，审计只保留操作元数据。
 5. 在后端本地 `.env` 设置并重启后端：
 
 ```dotenv
@@ -280,7 +282,8 @@ docker compose -f deploy/compose.yml -f deploy/compose.browser.yml up -d --build
 
 先在基础API注册身份，将受限文件放到
 `.local/deploy/ai_service_token`；复制 `deploy/browser.linux.example.json`
-到 `.local/deploy/browser.json`，修改为实际HTTPS后端地址和来源。
+到 `.local/deploy/browser.json`，修改为实际HTTPS后端地址和来源；
+API的 `CORS_ORIGINS` 同时修改为实际网页来源，不能保留示例localhost。
 模型挂载 `/models`，匿名元数据队列挂载 `/outbox`；容器不映射USB设备。
 容器构建/HTTPS网关和目标Linux环境仍需实际验收，不能依据模板声称已通过一键部署。
 
@@ -299,6 +302,7 @@ docker compose -f deploy/compose.yml -f deploy/compose.browser.yml up -d --build
 
 浏览器不提交emoji/confidence/student_id；业务API不接收图片；
 服务收到帧先验证授权/服务代际/课堂/时槽再解码，JPEG头尺寸最大1280×720，
+拒绝多SOF/不支持JPEG头并忽略EXIF自动旋转，保持先验尺寸与native解码一致；
 网页编码最多640×480、JPEG质量0.75，不采集音频、不录像。
 原始图片读取5秒超时，单次网页请求20秒超时，错过时槽丢弃。
 停止即清除采集表的owner/token/活动键，过期同样清除；15分钟后分批删除票据。

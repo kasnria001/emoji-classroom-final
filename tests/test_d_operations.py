@@ -19,10 +19,23 @@ def test_production_settings_require_private_secrets_and_support_files(tmp_path)
     key.write_text("x" * 64, encoding="utf-8")
     password.write_text("Private-bootstrap-123", encoding="utf-8")
     settings = Settings(
-        _env_file=None, DEBUG=False, SECRET_KEY_FILE=str(key), BOOTSTRAP_ADMIN_PASSWORD_FILE=str(password),
+        _env_file=None,
+        DEBUG=False,
+        SECRET_KEY_FILE=str(key),
+        BOOTSTRAP_ADMIN_PASSWORD_FILE=str(password),
     )
     assert settings.SECRET_KEY == "x" * 64
     assert settings.BOOTSTRAP_ADMIN_PASSWORD == "Private-bootstrap-123"
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, DEBUG=False, SECRET_KEY="x" * 64, BOOTSTRAP_ADMIN_PASSWORD="allletters")
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            DEBUG=False,
+            SECRET_KEY="x" * 64,
+            BOOTSTRAP_ADMIN_PASSWORD="Private-bootstrap-123",
+            CORS_ORIGINS=["*"],
+        )
 
 
 @pytest.mark.parametrize("existing", [False, True])

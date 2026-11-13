@@ -4,7 +4,7 @@ import { NCard, NEmpty, NGrid, NGridItem, NProgress, NSelect, NSpace, NStatistic
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import api from '@/api'
-import AIJobPanel from '@/components/ai/BrowserClassroomPanel.vue'
+import BrowserClassroomPanel from '@/components/ai/BrowserClassroomPanel.vue'
 import { captureSession, isCurrentSession } from '@/utils/auth/session'
 import { useUserStore } from '@/store'
 const userStore = useUserStore()
@@ -102,7 +102,7 @@ function onAutoRefreshChange(value) {
     <NEmpty v-if="!dashboardData" description="请选择课堂查看实时看板" />
 
     <template v-else>
-      <AIJobPanel :key="sessionId" :session-id="sessionId" />
+      <BrowserClassroomPanel :key="sessionId" :session-id="sessionId" />
       <NGrid :cols="4" :x-gap="12" :y-gap="12">
         <NGridItem>
           <NCard size="small">

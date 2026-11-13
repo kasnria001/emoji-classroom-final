@@ -22,7 +22,7 @@ import { useUserStore } from '@/store'
 import { formatDate, formatDateTime, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
-import AIJobPanel from '@/components/ai/BrowserClassroomPanel.vue'
+import BrowserClassroomPanel from '@/components/ai/BrowserClassroomPanel.vue'
 
 defineOptions({ name: '课堂会话' })
 
@@ -292,7 +292,7 @@ async function handleRemoveSchedule(userId) {
       </div>
     </NModal>
     <NModal v-model:show="aiVisible" preset="card" title="课堂 AI 采集" style="width: min(1100px, 95vw)">
-      <AIJobPanel v-if="aiVisible" :key="aiSessionId" :session-id="aiSessionId" />
+      <BrowserClassroomPanel v-if="aiVisible" :key="aiSessionId" :session-id="aiSessionId" />
     </NModal>
   </CommonPage>
 </template>

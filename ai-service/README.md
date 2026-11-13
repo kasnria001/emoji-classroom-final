@@ -16,7 +16,8 @@
 - standard：DeepFace 0.0.104 Emotion-only + YuNet，显式 ONNX Runtime 1.31.1 CPU，不安装 TensorFlow/PyTorch。
 - edge：OpenCV 4.11.0.86 YuNet + MobileFaceNet 表情 FP32 ONNX（不是身份 embedding 模型），不需要 DeepFace。
 - NumPy 2.2.6。FER 暂仅依赖/接口对照，不是已验证生产 profile。
-- `requirements/*-windows-py311.lock` 是含 SHA-256 的**此平台 wheel 锁**（含 pytest），不宣称覆盖 Linux/macOS。Linux 锁/容器待验收。
+- `requirements/*-windows-py311.lock` 是含 SHA-256 的**此平台 wheel 锁**（含修复版pytest），不宣称覆盖 Linux/macOS。Linux edge锁/容器待验收。
+- 实际默认edge、可选standard、自部署而非外部云API的完整说明见 `../docs/AI_SERVICE.md`。
 
 仓库根目录执行：
 
@@ -26,7 +27,7 @@ py -3.11 -m venv ai-service/.venv
 .\ai-service\.venv\Scripts\python.exe -m pip install --require-hashes -r ai-service/requirements/standard-windows-py311.lock
 # edge 仅替换上面的锁文件：
 # .\ai-service\.venv\Scripts\python.exe -m pip install --require-hashes -r ai-service/requirements/edge-windows-py311.lock
-.\ai-service\.venv\Scripts\python.exe -m pip install setuptools==75.8.0 wheel
+.\ai-service\.venv\Scripts\python.exe -m pip install setuptools==84.2.1 wheel
 .\ai-service\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e ai-service
 .\ai-service\.venv\Scripts\python.exe -m pip check
 ```
@@ -68,7 +69,20 @@ py -3.11 -m venv ai-service/.venv
 - no-face 返回空观测，不写 NEUTRAL；其他模型异常向上传播；过小人脸/低分有独立原因。
 - 当前 0.7/0.85 是验证参数，不是未经质量评估就批准的生产默认。
 
-实测证据、局限和未验收项见 `../docs/AI_MODEL_VALIDATION.md`。
+实测证据、局限和未验收项见 `../docs/AI_MODEL_VALIDATION.md` 和最新 `../docs/AI_TEST_REPORT.md`。
+
+## 4. 正式网页帧服务
+
+按 `../docs/AI_BROWSER_CAPTURE.md` 注册服务器身份，复制 `browser.example.json`
+到受限 `.local/browser-ai/config.json`，保存凭证到配置中的 `token_file` 后：
+
+```powershell
+.\ai-service\.venv\Scripts\python.exe -m emoji_ai.browser_service --config .local/browser-ai/config.json
+```
+
+服务不打开摄像头；学生网页仅上传定时单帧。默认edge、模型串行、队列最多1帧、
+admission4、HTTP解析连接16、JPEG256KiB/1280×720，以上不是全班容量承诺。
+元数据outbox TTL60秒，最终授权有效才入库；没有照片/视频缓存。
 
 ## 旧 CLI Worker（回归工具，非学生接入方式）
 

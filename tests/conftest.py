@@ -26,7 +26,7 @@ from app.core.exceptions import (
 )
 from app.models import User
 from app.schemas.login import JWTPayload
-from app.utils.jwt_utils import create_access_token
+from app.utils.jwt_utils import create_access_token, credential_tag
 
 
 def _register_exceptions(app: FastAPI) -> None:
@@ -44,6 +44,7 @@ def _make_token(user: User) -> str:
         username=user.username,
         is_superuser=user.is_superuser,
         exp=datetime.now() + timedelta(hours=1),
+        credential_tag=credential_tag(user.password),
     )
     return create_access_token(data=payload)
 

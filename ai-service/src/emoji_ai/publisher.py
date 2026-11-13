@@ -34,7 +34,9 @@ class APIClient:
             response = self.session.post(self.base + path, json=data, timeout=(3, 10), allow_redirects=False)
         except requests.RequestException:
             raise BackendUnavailable("Backend connection failed") from None
-        if response.status_code in (401, 403):
+        # 采集授权跨服务/课堂403只拒绝该帧，不关闭共享推理线程。
+        capture_scoped = path in ("/ai/browser/worker/claim", "/ai/browser/worker/outcomes")
+        if response.status_code == 401 or (response.status_code == 403 and not capture_scoped):
             raise CredentialRejected("Device authorization rejected")
         if response.status_code == 429 or response.status_code >= 500:
             raise BackendUnavailable("Backend temporarily unavailable")

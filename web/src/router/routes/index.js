@@ -1,8 +1,7 @@
 import i18n from '~/i18n'
 import { useUserStore } from '@/store/modules/user'
+import Layout from '@/layout/index.vue'
 const { t } = i18n.global
-
-const Layout = () => import('@/layout/index.vue')
 
 export const basicRoutes = [
   {

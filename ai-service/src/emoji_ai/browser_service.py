@@ -74,6 +74,7 @@ def jpeg_dimensions(data):
     if not data.startswith(b"\xff\xd8"):
         raise ValueError("JPEG required")
     offset = 2
+    dimensions = None
     while offset < len(data):
         if data[offset] != 0xFF:
             raise ValueError("Invalid JPEG header")
@@ -83,7 +84,11 @@ def jpeg_dimensions(data):
             break
         marker = data[offset]
         offset += 1
-        if marker in (0xD8, 0xD9, 0xDA, 0x00):
+        if marker == 0xDA:
+            if dimensions is None:
+                break
+            return dimensions
+        if marker in (0xD8, 0xD9, 0x00, 0xDC) or 0xD0 <= marker <= 0xD7:
             break
         if offset + 2 > len(data):
             break
@@ -91,19 +96,23 @@ def jpeg_dimensions(data):
         if length < 2 or offset + length > len(data):
             break
         if marker in (0xC0, 0xC1, 0xC2):
+            if dimensions is not None:
+                raise ValueError("Multiple JPEG frame headers")
             if length < 8:
                 break
             height, width = struct.unpack_from(">HH", data, offset + 3)
             if not (1 <= width <= 1280 and 1 <= height <= 720 and width * height <= 921600):
                 raise ValueError("Image dimensions exceed limit")
-            return width, height
+            dimensions = (width, height)
+        elif 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            raise ValueError("Unsupported JPEG frame header")
         offset += length
     raise ValueError("Invalid JPEG dimensions")
 
 
 def decode_frame(data):
     width, height = jpeg_dimensions(data)
-    frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
     if frame is None or frame.shape[:2] != (height, width):
         raise ValueError("JPEG decode failed")
     return frame

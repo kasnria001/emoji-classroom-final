@@ -41,6 +41,7 @@ async def prepare(c, monkeypatch):
         f"/api/v1/ai/browser/classrooms/{c.session.id}/captures", headers=c.student_headers, json={"consent": True}
     )
     assert r.status_code == 200, r.text
+    assert r.headers["cache-control"] == "no-store" and "headers" not in r.json()
     c.capture = r.json()["data"]
 
 
@@ -222,3 +223,16 @@ async def test_administrator_control_teacher_readonly_and_explicit_rbac(ai_clien
     assert stopped.status_code == 200 and stopped.json()["data"]["enabled"] is False
     assert stopped.json()["data"]["can_configure"] is True
     assert (await BrowserCapture.first()).owner_id is None
+
+
+async def test_password_change_clears_camera_authorization(ai_client, monkeypatch):
+    from app.controllers.user import user_controller
+
+    c = ai_client
+    await prepare(c, monkeypatch)
+    await user_controller.set_password(c.student, "ChangedCamera123")
+    assert (await BrowserCapture.first()).owner_id is None
+    assert (
+        await c.post("/api/v1/ai/browser/worker/claim", headers=c.device_headers, json=claim_body(c))
+    ).status_code == 410
+    assert (await c.get(f"/api/v1/ai/browser/classrooms/{c.session.id}", headers=c.student_headers)).status_code == 401

@@ -57,6 +57,40 @@ async def main():
         await expect(page.get_by_test_id("device-secret")).not_to_be_visible()
         assert secret not in await page.locator("body").inner_text()
         del secret
+        # 随机重置密码不能在弹窗关闭后、存储或错误中继续出现。
+        await page.goto(config["web_url"] + "/system/user")
+        student_row = page.locator("tr").filter(has_text=config["student"]).first
+        await expect(student_row).to_be_visible()
+        await student_row.get_by_role("button", name="重置密码", exact=True).click()
+        async with page.expect_response(
+            lambda response: response.url.endswith("/api/v1/user/reset_password")
+        ) as pending:
+            await page.get_by_role("button", name="确认", exact=True).click()
+        reset_response = await pending.value
+        assert reset_response.status == 200
+        assert reset_response.headers.get("cache-control") == "no-store"
+        temporary = (await reset_response.json())["data"]["temporary_password"]
+        await expect(page.get_by_text("一次性随机密码", exact=True)).to_be_visible()
+        assert temporary in await page.locator("body").inner_text()
+        assert temporary not in await page.evaluate("JSON.stringify(localStorage)")
+        await page.get_by_role("button", name="已交付，关闭并清除", exact=True).click()
+        assert temporary not in await page.locator("body").inner_text()
+        # 恢复隔离学生密码；登录接口必须使用reset后的新凭证。
+        login = await admin_context.request.post(
+            config["api_url"] + "/api/v1/base/access_token",
+            data={"username": config["student"], "password": temporary},
+        )
+        assert login.status == 200
+        token = (await login.json())["data"]["access_token"]
+        changed = await admin_context.request.post(
+            config["api_url"] + "/api/v1/base/update_password",
+            headers={"token": token},
+            data={"old_password": temporary, "new_password": config["password"]},
+        )
+        assert changed.status == 200
+        expired = await admin_context.request.get(config["api_url"] + "/api/v1/base/userinfo", headers={"token": token})
+        assert expired.status == 401
+        del temporary, token
         teacher_context, page = await context_for("teacher")
         await expect(page.get_by_text("AI服务身份", exact=True)).not_to_be_visible()
         await expect(page.get_by_text("课堂采集管理", exact=True)).not_to_be_visible()
@@ -93,7 +127,8 @@ async def main():
         assert not errors, errors
         await browser.close()
         print(
-            "Chromium: admin global workbench/service identity/once-secret/stop; teacher readonly/own-scope; student route isolation passed."
+            "Chromium: admin global workbench/service identity/once-secret/random-reset/no-store/revocation/stop; "
+            "teacher readonly/own-scope; student route isolation passed."
         )
 
 

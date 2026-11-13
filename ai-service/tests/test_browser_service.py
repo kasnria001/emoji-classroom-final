@@ -1,4 +1,5 @@
 import threading
+import struct
 from http.client import HTTPConnection
 from types import SimpleNamespace
 from uuid import uuid4
@@ -19,6 +20,7 @@ from emoji_ai.browser_service import (
 )
 from emoji_ai.mapping import Decision
 from emoji_ai.outbox import Outbox
+from emoji_ai.publisher import APIClient, CredentialRejected
 
 
 def jpeg():
@@ -44,6 +46,31 @@ def test_single_person_gate_before_quality_filter():
     assert observation_reason([observation(), Observation(None, 0.95, "too_small")], 0.7, 0.85) == "multi_face"
     assert observation_reason([observation(0.4)], 0.7, 0.85) == "filtered"
     assert observation_reason([observation()], 0.7, 0.85) == "ready"
+
+
+def test_multiple_frame_headers_rejected_before_native_decode(monkeypatch):
+    data = jpeg()
+    offset = data.index(b"\xff\xc0")
+    length = struct.unpack_from(">H", data, offset + 2)[0] + 2
+    duplicated = data[:offset] + data[offset : offset + length] + data[offset:]
+    monkeypatch.setattr(cv2, "imdecode", lambda *_: pytest.fail("must reject before native decode"))
+    with pytest.raises(ValueError, match="Multiple"):
+        decode_frame(duplicated)
+
+
+def test_capture_scope_rejection_does_not_revoke_service(monkeypatch):
+    api = APIClient("http://localhost:9999/api/v1", "unused")
+    monkeypatch.setattr(api.session, "post", lambda *_args, **_kwargs: Response({}, 403))
+    try:
+        assert api.call("/ai/browser/worker/claim", {}).status_code == 403
+        assert api.call("/ai/browser/worker/outcomes", {}).status_code == 403
+        with pytest.raises(CredentialRejected):
+            api.call("/ai/worker/heartbeat", {})
+        monkeypatch.setattr(api.session, "post", lambda *_args, **_kwargs: Response({}, 401))
+        with pytest.raises(CredentialRejected):
+            api.call("/ai/browser/worker/claim", {})
+    finally:
+        api.close()
 
 
 class Response:
